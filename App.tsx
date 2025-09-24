@@ -32,6 +32,9 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recentLogCache, setRecentLogCache] = useState<Record<string, string>>({});
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [habitEntries, setHabitEntries] = useState<LogEntry[]>([]);
+  const [entriesByHabit, setEntriesByHabit] = useState<Record<string, LogEntry[]>>({});
+  const [recentEntries, setRecentEntries] = useState<LogEntry[]>([]);
 
   useEffect(() => {
     checkAuth();
@@ -65,7 +68,6 @@ export default function App() {
       
       if (error) throw error;
       
-      // Convert to UserHabit format with mock data for MVP
       const habits: UserHabit[] = (data ?? []).map(habit => {
         const habitName = habit.name || habit.title || 'Habit';
         const fallbackEmoji = STARTER_HABITS.find(
@@ -80,9 +82,9 @@ export default function App() {
           name: habitName,
           emoji: habit.emoji || fallbackEmoji,
           alias: habit.alias,
-          streak: Math.floor(Math.random() * 10) + 1, // Mock streak
-          totalLogged: Math.floor(Math.random() * 50) + 10, // Mock total
-          lastLogged: new Date().toISOString(),
+          streak: 0,
+          totalLogged: 0,
+          lastLogged: habit.last_logged_at || habit.created_at,
           createdAt: habit.created_at,
           unit: habit.unit || starterHabit?.unit,
           unitLabel: habit.goal_unit_label || starterHabit?.displayUnit,
@@ -96,8 +98,58 @@ export default function App() {
       });
       
       setUserHabits(habits);
+      await loadHabitEntries(targetUserId, habits);
     } catch (error) {
       console.error('Error loading habits:', error);
+    }
+  };
+
+  const loadHabitEntries = async (targetUserId: string, habits?: UserHabit[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('habit_entries')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .order('logged_at', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+
+      const entries = (data ?? []).map(entry => ({
+        ...entry,
+        habit: habits?.find(h => h.id === entry.habit_id),
+      }));
+
+      setHabitEntries(entries);
+
+      const grouped: Record<string, LogEntry[]> = {};
+      entries.forEach(entry => {
+        if (!grouped[entry.habit_id]) grouped[entry.habit_id] = [];
+        grouped[entry.habit_id].push(entry);
+      });
+      setEntriesByHabit(grouped);
+
+      setRecentEntries(entries.slice(0, 10));
+
+      if (habits) {
+        const updatedHabits = habits.map(habit => {
+          const habitEntriesForHabit = grouped[habit.id] || [];
+          const totalLogged = habitEntriesForHabit.reduce((sum, entry) => sum + entry.value, 0);
+          const streak = calculateStreak(habitEntriesForHabit);
+          const lastLogged = habitEntriesForHabit[0]?.logged_at || habit.lastLogged;
+
+          return {
+            ...habit,
+            totalLogged,
+            streak,
+            lastLogged,
+          };
+        });
+
+        setUserHabits(updatedHabits);
+      }
+    } catch (error) {
+      console.error('Error loading habit entries:', error);
     }
   };
 
@@ -331,6 +383,72 @@ export default function App() {
       setToastMessage(null);
       toastTimeoutRef.current = null;
     }, 2400);
+  };
+
+  const isSameDay = (dateA: Date, dateB: Date) => (
+    dateA.getFullYear() === dateB.getFullYear() &&
+    dateA.getMonth() === dateB.getMonth() &&
+    dateA.getDate() === dateB.getDate()
+  );
+
+  const calculateStreak = (entries: LogEntry[]) => {
+    if (!entries.length) return 0;
+
+    let streak = 0;
+    let currentDate = new Date();
+
+    for (const entry of entries) {
+      const entryDate = new Date(entry.logged_at);
+
+      if (streak === 0) {
+        if (isSameDay(entryDate, currentDate)) {
+          streak += 1;
+          continue;
+        }
+
+        const yesterday = new Date(currentDate);
+        yesterday.setDate(currentDate.getDate() - 1);
+        if (isSameDay(entryDate, yesterday)) {
+          streak += 1;
+          currentDate = entryDate;
+          continue;
+        }
+
+        break;
+      }
+
+      const previousDay = new Date(currentDate);
+      previousDay.setDate(previousDay.getDate() - 1);
+
+      if (isSameDay(entryDate, previousDay)) {
+        streak += 1;
+        currentDate = entryDate;
+      } else if (isSameDay(entryDate, currentDate)) {
+        continue;
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  };
+
+  const formatEntrySummary = (entry: LogEntry) => {
+    const habit = entry.habit;
+    const quantity = entry.value;
+
+    if (habit?.inputMode === 'timer' || habit?.inputMode === 'duration_min') {
+      const hours = Math.floor(quantity / 60);
+      const minutes = quantity % 60;
+      const formattedDuration = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+      return `${habit?.emoji || '⏱️'} ${formattedDuration}`;
+    }
+
+    const unit = quantity === 1
+      ? habit?.unitLabel || 'unit'
+      : habit?.unitPlural || habit?.unitLabel || 'units';
+
+    return `${habit?.emoji || '✅'} ${quantity} ${unit}`;
   };
 
   const renderOnboarding = () => (
@@ -567,6 +685,22 @@ export default function App() {
           </View>
         </View>
         
+        {recentEntries.length > 0 && (
+          <View style={styles.recentLogsSection}>
+            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            {recentEntries.map(entry => (
+              <View key={entry.id} style={styles.logRow}>
+                <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
+                <View style={styles.logRowInfo}>
+                  <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
+                  <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
+                </View>
+                <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+        
         {userHabits.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌱</Text>
@@ -587,9 +721,7 @@ export default function App() {
               const now = new Date();
               const alreadyLoggedToday = Boolean(
                 lastLogged &&
-                lastLogged.getDate() === now.getDate() &&
-                lastLogged.getMonth() === now.getMonth() &&
-                lastLogged.getFullYear() === now.getFullYear()
+                isSameDay(lastLogged, now)
               );
 
               return (
@@ -1068,23 +1200,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   habitBadge: {
-    backgroundColor: '#f6e05e',
-    color: '#2d3748',
+    marginTop: 4,
+    backgroundColor: '#fff5f5',
+    color: '#e53e3e',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: 'hidden',
     fontSize: 12,
     fontWeight: '600',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    marginTop: 4,
-    alignSelf: 'center',
   },
   logButtonDisabled: {
-    backgroundColor: '#a0aec0',
-    opacity: 0.7,
+    backgroundColor: '#cbd5e0',
   },
   quickTapCardDisabled: {
-    opacity: 0.7,
-    backgroundColor: '#edf2f7',
+    opacity: 0.5,
   },
   toastContainer: {
     position: 'absolute',
@@ -1108,5 +1238,46 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  recentLogsSection: {
+    backgroundColor: '#f7fafc',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2d3748',
+    marginBottom: 12,
+  },
+  logRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  logRowEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  logRowInfo: {
+    flex: 1,
+  },
+  logRowTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  logRowSubtitle: {
+    fontSize: 13,
+    color: '#4a5568',
+  },
+  logRowTime: {
+    fontSize: 12,
+    color: '#718096',
   },
 });

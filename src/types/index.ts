@@ -35,10 +35,11 @@ export interface UserHabit {
 
 export interface LogEntry {
   id: string;
-  habitId: string;
-  quantity: number;
-  loggedAt: string;
+  habit_id: string;
+  value: number;
+  logged_at: string;
   note?: string;
+  habit?: UserHabit;
 }
 
 export interface StreakData {
