@@ -849,8 +849,8 @@ export default function App() {
   );
 
   const renderDashboardDonut = () => {
-    const size = 88;
-    const strokeWidth = 10;
+    const size = 64;
+    const strokeWidth = 8;
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const progress = Math.max(0, Math.min(todayGoalsSummary.percentComplete, 100)) / 100;
@@ -882,10 +882,6 @@ export default function App() {
             />
           )}
         </Svg>
-        <View style={styles.donutLabel}>
-          <Text style={styles.donutPercent}>{todayGoalsSummary.percentComplete}%</Text>
-          <Text style={styles.donutCaption}>Daily goals</Text>
-        </View>
       </View>
     );
   };
@@ -897,42 +893,59 @@ export default function App() {
           <View style={styles.heroTopRow}>
             <View style={styles.dashboardHeroLeft}>
               <Text style={styles.heroGreeting}>Hey {user?.user_metadata?.username || 'Hyfo human'} 👋</Text>
-              <Text style={styles.heroHeadline}>Hyperfocused Life starts today.</Text>
-              <View style={styles.heroHighlightRow}>
-                <View style={styles.heroHighlightCard}>
-                  <Text style={styles.heroHighlightLabel}>Longest streak</Text>
-                  <Text style={styles.heroHighlightValue}>{longestStreak}</Text>
-                </View>
-                <View style={styles.heroHighlightCard}>
-                  <Text style={styles.heroHighlightLabel}>Entries logged</Text>
-                  <Text style={styles.heroHighlightValue}>{totalLogs}</Text>
-                </View>
-              </View>
-              <TouchableOpacity style={styles.heroCTA} onPress={() => setAppState('habit-selection')}>
-                <Text style={styles.heroCTAText}>+ Add habit</Text>
-              </TouchableOpacity>
+              <Text style={styles.heroHeadline}>Stay hyperfocused today.</Text>
             </View>
-            <View style={styles.heroRightColumn}>
-              <TouchableOpacity style={styles.heroSignOut} onPress={handleSignOut}>
-                <Text style={styles.heroSignOutText}>Sign out</Text>
-              </TouchableOpacity>
-              <View style={styles.heroDonutWrapper}>
-                {renderDashboardDonut()}
-                <Text style={styles.heroDonutSubtext}>
-                  {todayGoalsSummary.completed}/{todayGoalsSummary.total} completed
-                </Text>
+            <TouchableOpacity style={styles.heroSignOut} onPress={handleSignOut}>
+              <Text style={styles.heroSignOutText}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.heroMetricsRow}>
+            <View style={styles.heroMetricGroup}>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricValue}>{longestStreak}</Text>
+                <Text style={styles.heroMetricLabel}>Longest streak</Text>
               </View>
-              <TouchableOpacity
-                style={styles.heroSecondaryCTA}
-                onPress={() => {
-                  setRecentEntriesLimit('today');
-                  setSelectedHabitFilter(null);
-                  setIsRecentActivityModalVisible(true);
-                }}
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricValue}>{totalLogs}</Text>
+                <Text style={styles.heroMetricLabel}>Entries logged</Text>
+              </View>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroMetricValue}>{totalHabits}</Text>
+                <Text style={styles.heroMetricLabel}>Active habits</Text>
+              </View>
+            </View>
+            <View style={styles.heroDonutWrapper}>
+              {renderDashboardDonut()}
+              <Text
+                style={[
+                  styles.heroDonutCaption,
+                  todayGoalsSummary.total > 0 && todayGoalsSummary.completed >= todayGoalsSummary.total
+                    ? styles.heroDonutCaptionComplete
+                    : styles.heroDonutCaptionPending,
+                ]}
               >
-                <Text style={styles.heroSecondaryText}>Recent activity →</Text>
-              </TouchableOpacity>
+                {todayGoalsSummary.total > 0
+                  ? `${todayGoalsSummary.completed}/${todayGoalsSummary.total} daily`
+                  : 'No goals set'}
+              </Text>
             </View>
+          </View>
+
+          <View style={styles.heroActionRow}>
+            <TouchableOpacity style={styles.heroCTA} onPress={() => setAppState('habit-selection')}>
+              <Text style={styles.heroCTAText}>+ Add habit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.heroSecondaryCTA}
+              onPress={() => {
+                setRecentEntriesLimit('today');
+                setSelectedHabitFilter(null);
+                setIsRecentActivityModalVisible(true);
+              }}
+            >
+              <Text style={styles.heroSecondaryText}>Recent activity →</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -2489,10 +2502,10 @@ const styles = StyleSheet.create({
     color: '#4a5568',
   },
   heroHeadline: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#1a202c',
-    marginTop: 4,
+    marginTop: 6,
   },
   heroSignOut: {
     paddingVertical: 8,
@@ -2505,31 +2518,69 @@ const styles = StyleSheet.create({
     color: '#4a5568',
     fontWeight: '600',
   },
-  heroHighlightRow: {
+  heroMetricsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 18,
   },
-  heroHighlightCard: {
+  heroMetricGroup: {
     flex: 1,
+    flexDirection: 'row',
     backgroundColor: '#f7fafc',
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    padding: 14,
+    gap: 12,
+    justifyContent: 'space-between',
   },
-  heroHighlightLabel: {
-    fontSize: 12,
-    color: '#718096',
-    fontWeight: '600',
+  heroMetric: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
   },
-  heroHighlightValue: {
-    marginTop: 4,
+  heroMetricValue: {
     fontSize: 20,
     fontWeight: '800',
     color: '#2d3748',
+    textAlign: 'center',
+  },
+  heroMetricLabel: {
+    marginTop: 0,
+    fontSize: 12,
+    color: '#4a5568',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  heroDonutWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroDonutCard: {
+    width: 96,
+    backgroundColor: '#1a202c',
+    borderRadius: 16,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  heroDonutTitle: {
+    marginTop: 6,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#cbd5f5',
+  },
+  heroDonutSubtext: {
+    fontSize: 10,
+    color: '#e2e8f0',
+    fontWeight: '600',
+  },
+  heroActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
   },
   heroCTA: {
-    marginTop: 16,
+    flex: 1,
     backgroundColor: '#48bb78',
     paddingVertical: 14,
     borderRadius: 12,
@@ -2541,8 +2592,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   heroSecondaryCTA: {
-    marginTop: 12,
-    paddingVertical: 12,
+    flex: 1,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
     backgroundColor: '#edf2f7',
@@ -2555,68 +2606,6 @@ const styles = StyleSheet.create({
   heroRightColumn: {
     alignItems: 'flex-end',
     gap: 12,
-  },
-  heroDonutWrapper: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  heroDonutSubtext: {
-    fontSize: 12,
-    color: '#4a5568',
-    fontWeight: '600',
-  },
-  donutContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  donutLabel: {
-    position: 'absolute',
-    alignItems: 'center',
-  },
-  donutPercent: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#2d3748',
-  },
-  donutCaption: {
-    fontSize: 11,
-    color: '#718096',
-    marginTop: -2,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 999,
-    padding: 4,
-    marginBottom: 24,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 999,
-  },
-  tabButtonActive: {
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  tabLabel: {
-    color: '#4a5568',
-    fontWeight: '600',
-  },
-  tabLabelActive: {
-    color: '#2d3748',
-  },
-  viewFullActivityButton: {
-    alignItems: 'flex-end',
-    marginTop: 12,
-  },
-  viewFullActivityText: {
-    color: '#4299e1',
-    fontWeight: '600',
   },
   goalContainer: {
     marginTop: 8,
@@ -2918,5 +2907,16 @@ const styles = StyleSheet.create({
     right: 0,
     width: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  heroDonutCaption: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  heroDonutCaptionPending: {
+    color: '#63b3ed',
+  },
+  heroDonutCaptionComplete: {
+    color: '#f6ad55',
   },
 });
