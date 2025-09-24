@@ -38,6 +38,8 @@ export default function App() {
   const [recentEntriesLimit, setRecentEntriesLimit] = useState<'week' | 'month' | 'all'>('week');
   const [isRecentActivityModalVisible, setIsRecentActivityModalVisible] = useState(false);
   const [selectedHabitFilter, setSelectedHabitFilter] = useState<string | null>(null);
+  const [lastLoggedEntry, setLastLoggedEntry] = useState<LogEntry | null>(null);
+  const [undoVisible, setUndoVisible] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -314,37 +316,44 @@ export default function App() {
     }
   };
 
-  const logHabit = async (habitId: string, quantity: number = 1, options?: { silent?: boolean; meta?: { durationMinutes?: number } }) => {
+  const logHabit = async (habitId: string, quantity: number = 1, options?: { silent?: boolean; meta?: { durationMinutes?: number }; skipReload?: boolean }) => {
     if (!user) {
       Alert.alert('Sign in required', 'Please log in before tracking habits.');
       setAppState('login');
-      return;
+      return null;
     }
 
     const cacheKey = `${habitId}-${quantity}-${options?.meta?.durationMinutes ?? ''}`;
     if (!options?.silent && recentLogCache[cacheKey]) {
-      return;
+      return null;
     }
 
     try {
       setIsLogging(true);
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('habit_entries')
         .insert({
           habit_id: habitId,
           value: quantity,
           user_id: user.id,
           logged_at: new Date().toISOString(),
-        });
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
       setRecentLogCache(prev => ({ ...prev, [cacheKey]: new Date().toISOString() }));
 
-      loadUserHabits();
+      if (!options?.skipReload) {
+        loadUserHabits();
+      }
+
+      return data as LogEntry;
     } catch (error) {
       Alert.alert('Error', 'Failed to log habit');
       console.error('Log habit error:', error);
+      return null;
     } finally {
       setIsLogging(false);
     }
@@ -358,7 +367,7 @@ export default function App() {
     setToastMessage(null);
   };
 
-  const showQuickLogFeedback = (habit: UserHabit, quantity: number) => {
+  const showQuickLogFeedback = (habit: UserHabit, quantity: number, entry?: LogEntry) => {
     let message: string;
 
     if (habit.inputMode === 'timer' || habit.inputMode === 'duration_min') {
@@ -379,11 +388,16 @@ export default function App() {
     }
 
     setToastMessage(message);
+    if (entry) {
+      setLastLoggedEntry(entry);
+      setUndoVisible(true);
+    }
     if (toastTimeoutRef.current) {
       clearTimeout(toastTimeoutRef.current);
     }
     toastTimeoutRef.current = setTimeout(() => {
       setToastMessage(null);
+      setUndoVisible(false);
       toastTimeoutRef.current = null;
     }, 2400);
   };
@@ -452,6 +466,55 @@ export default function App() {
       : habit?.unitPlural || habit?.unitLabel || 'units';
 
     return `${habit?.emoji || '✅'} ${quantity} ${unit}`;
+  };
+
+  const handleUndoLastLog = async () => {
+    if (!lastLoggedEntry) return;
+
+    try {
+      await supabase
+        .from('habit_entries')
+        .delete()
+        .eq('id', lastLoggedEntry.id);
+
+      setHabitEntries(prev => prev.filter(entry => entry.id !== lastLoggedEntry.id));
+      setEntriesByHabit(prev => {
+        const updated = { ...prev };
+        const list = updated[lastLoggedEntry.habit_id]?.filter(entry => entry.id !== lastLoggedEntry.id) || [];
+        updated[lastLoggedEntry.habit_id] = list;
+        return updated;
+      });
+      setRecentEntries(prev => prev.filter(entry => entry.id !== lastLoggedEntry.id));
+      setLastLoggedEntry(null);
+      setUndoVisible(false);
+      loadUserHabits();
+    } catch (error) {
+      Alert.alert('Error', 'Unable to undo log right now.');
+      console.error('Undo error:', error);
+    }
+  };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    try {
+      await supabase
+        .from('habit_entries')
+        .delete()
+        .eq('id', entryId);
+
+      setHabitEntries(prev => prev.filter(entry => entry.id !== entryId));
+      setEntriesByHabit(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(key => {
+          updated[key] = updated[key].filter(entry => entry.id !== entryId);
+        });
+        return updated;
+      });
+      setRecentEntries(prev => prev.filter(entry => entry.id !== entryId));
+      loadUserHabits();
+    } catch (error) {
+      Alert.alert('Error', 'Unable to delete entry right now.');
+      console.error('Delete entry error:', error);
+    }
   };
 
   const renderOnboarding = () => (
@@ -703,7 +766,12 @@ export default function App() {
                   <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
                   <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
                 </View>
-                <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                <View style={styles.logRowActions}>
+                  <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                  <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
           </View>
@@ -906,6 +974,9 @@ export default function App() {
                   <View style={styles.modalLogMeta}>
                     <Text style={styles.modalLogDate}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
                     <Text style={styles.modalLogTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.modalDeleteButton}>
+                      <Text style={styles.modalDeleteButtonText}>Delete</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               ))
@@ -958,16 +1029,32 @@ export default function App() {
             valueToLog = meta.durationMinutes;
           }
 
-          await logHabit(activeLogHabit.id, valueToLog, { silent: true, meta });
-          showQuickLogFeedback(activeLogHabit, valueToLog);
+          const createdEntry = await logHabit(activeLogHabit.id, valueToLog, { silent: true, meta, skipReload: true });
+          if (createdEntry) {
+            const enrichedEntry = { ...createdEntry, habit: activeLogHabit };
+            setHabitEntries(prev => [enrichedEntry, ...prev]);
+            setEntriesByHabit(prev => {
+              const list = prev[activeLogHabit.id] ? [enrichedEntry, ...prev[activeLogHabit.id]] : [enrichedEntry];
+              return { ...prev, [activeLogHabit.id]: list };
+            });
+            setRecentEntries(prev => [enrichedEntry, ...prev].slice(0, 3));
+            showQuickLogFeedback(activeLogHabit, valueToLog, enrichedEntry);
+          }
+
+          loadUserHabits();
           setActiveLogHabit(null);
         }}
         isLogging={isLogging}
       />
       {toastMessage && (
-        <View style={styles.toastContainer} pointerEvents="none">
+        <View style={styles.toastContainer} pointerEvents="box-none">
           <View style={styles.toastCard}>
             <Text style={styles.toastText}>{toastMessage}</Text>
+            {undoVisible && (
+              <TouchableOpacity onPress={handleUndoLastLog} style={styles.toastUndoButton}>
+                <Text style={styles.toastUndoText}>Undo</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -1334,11 +1421,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   toastText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  toastUndoButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'white',
+  },
+  toastUndoText: {
+    color: '#2d3748',
+    fontWeight: '700',
   },
   recentLogsSection: {
     backgroundColor: '#f7fafc',
@@ -1380,6 +1480,21 @@ const styles = StyleSheet.create({
   logRowTime: {
     fontSize: 12,
     color: '#718096',
+  },
+  logRowActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  deleteButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#fed7d7',
+  },
+  deleteButtonText: {
+    color: '#c53030',
+    fontSize: 12,
+    fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
@@ -1491,6 +1606,18 @@ const styles = StyleSheet.create({
   modalLogTime: {
     fontSize: 12,
     color: '#718096',
+  },
+  modalDeleteButton: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#fed7d7',
+  },
+  modalDeleteButtonText: {
+    color: '#c53030',
+    fontWeight: '600',
+    fontSize: 12,
   },
   recentLogsHeader: {
     flexDirection: 'row',
