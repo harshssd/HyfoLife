@@ -4,8 +4,9 @@ import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Tex
 import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
-import { UserHabit, LogEntry, VisualTheme, HabitGoal } from './src/types';
+import { UserHabit, LogEntry, VisualTheme, HabitGoal, HeatmapDay } from './src/types';
 import QuickLogModal from './src/components/QuickLogModal';
+import HeatmapTile from './src/components/HeatmapTile';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
@@ -63,6 +64,7 @@ export default function App() {
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'recent'>('overview');
   const [habitGoals, setHabitGoals] = useState<Record<string, HabitGoal | null>>({});
   const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
+  const [heatmapData, setHeatmapData] = useState<Record<string, HeatmapDay[]>>({});
 
   useEffect(() => {
     checkAuth();
@@ -114,14 +116,14 @@ export default function App() {
         );
 
         return {
-          id: habit.id,
+        id: habit.id,
           name: habitName,
           emoji: habit.emoji || fallbackEmoji,
-          alias: habit.alias,
+        alias: habit.alias,
           streak: 0,
           totalLogged: 0,
           lastLogged: habit.last_logged_at || habit.created_at,
-          createdAt: habit.created_at,
+        createdAt: habit.created_at,
           unit: habit.unit || starterHabit?.unit,
           unitLabel: habit.goal_unit_label || starterHabit?.displayUnit,
           unitPlural: starterHabit?.displayUnitPlural,
@@ -134,10 +136,10 @@ export default function App() {
       });
       
       setUserHabits(habits);
-      await Promise.all([
-        loadHabitEntries(targetUserId, habits),
-        loadHabitGoals(targetUserId),
-      ]);
+
+      const goalMap = await loadHabitGoals(targetUserId);
+      setHabitGoals(goalMap);
+      await loadHabitEntries(targetUserId, habits, goalMap);
     } catch (error) {
       console.error('Error loading habits:', error);
     }
@@ -154,25 +156,29 @@ export default function App() {
 
       const goalMap: Record<string, HabitGoal> = {};
       (data ?? []).forEach(goal => {
-        goalMap[goal.habit_id] = goal;
+        goalMap[goal.habit_id] = goal as HabitGoal;
       });
 
-      setHabitGoals(goalMap);
+      return goalMap;
     } catch (error) {
       console.error('Error loading habit goals:', error);
+      return {};
     }
   };
 
-  const loadHabitEntries = async (targetUserId: string, habits?: UserHabit[]) => {
+  const loadHabitEntries = async (targetUserId: string, habits?: UserHabit[], goalMap?: Record<string, HabitGoal | null>) => {
     try {
       const startOfDayUTC = new Date();
       startOfDayUTC.setHours(0, 0, 0, 0);
+
+      const thirtyDaysAgo = new Date(startOfDayUTC);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
 
       const { data, error } = await supabase
         .from('habit_entries')
         .select('*')
         .eq('user_id', targetUserId)
-        .gte('logged_at', startOfDayUTC.toISOString())
+        .gte('logged_at', thirtyDaysAgo.toISOString())
         .order('logged_at', { ascending: false });
 
       const entries = (data ?? []).map(entry => ({
@@ -180,8 +186,13 @@ export default function App() {
         habit: habits?.find(h => h.id === entry.habit_id),
       }));
 
+      const todayEntriesList = entries.filter(entry => {
+        const entryDate = new Date(entry.logged_at);
+        return isSameDay(entryDate, new Date());
+      });
+
       setHabitEntries(entries);
-      setTodayEntries(entries);
+      setTodayEntries(todayEntriesList);
       setModalEntries(entries);
 
       const grouped: Record<string, LogEntry[]> = {};
@@ -191,7 +202,8 @@ export default function App() {
       });
       setEntriesByHabit(grouped);
 
-      setRecentEntries(entries.slice(0, 4));
+      setRecentEntries(todayEntriesList.slice(0, 4));
+      setHeatmapData(buildHeatmap(grouped, habits || userHabits, goalMap || habitGoals, thirtyDaysAgo, startOfDayUTC));
 
       if (habits) {
         const updatedHabits = habits.map(habit => {
@@ -465,14 +477,18 @@ export default function App() {
     dateA.getDate() === dateB.getDate()
   );
 
-  const calculateStreak = (entries: LogEntry[]) => {
+  const calculateStreak = (entries: LogEntry[], referenceDate?: Date) => {
     if (!entries.length) return 0;
 
     let streak = 0;
-    let currentDate = new Date();
+    let currentDate = referenceDate ? new Date(referenceDate) : new Date();
 
     for (const entry of entries) {
       const entryDate = new Date(entry.logged_at);
+
+      if (entryDate > currentDate) {
+        continue;
+      }
 
       if (streak === 0) {
         if (isSameDay(entryDate, currentDate)) {
@@ -915,29 +931,28 @@ export default function App() {
 
                 return (
               <View key={habit.id} style={styles.habitRow}>
-                <View style={styles.habitInfo}>
-                  <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-                  <View>
-                    <Text style={styles.habitName}>{habit.name}</Text>
-                    <Text style={styles.habitStats}>
-                      {habit.streak} day streak • {habit.totalLogged} total
-                    </Text>
-                    {renderGoalModule(habit)}
-                    {alreadyComplete && (
-                      <Text style={styles.habitBadge}>Done for today 🔥</Text>
-                    )}
-                  </View>
+                <View style={styles.habitRowHeader}>
+                  <Text style={styles.habitName}>{habit.name}</Text>
+                  <TouchableOpacity
+                    style={styles.habitLogPill}
+                    onPress={() => {
+                      const alreadyComplete = isCheckinHabit(habit)
+                        ? Boolean(habit.lastLogged && isSameDay(new Date(habit.lastLogged), new Date()))
+                        : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
+                      if (alreadyComplete && isCheckinHabit(habit)) return;
+                      setActiveLogHabit(habit);
+                    }}
+                  >
+                    <Text style={styles.habitLogPillText}>Log</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                      style={[styles.logButton, (alreadyComplete && isCheckinHabit(habit)) && styles.logButtonDisabled]}
-                      onPress={() => {
-                        if (alreadyComplete && isCheckinHabit(habit)) return;
-                        setActiveLogHabit(habit);
-                      }}
-                      disabled={alreadyComplete && isCheckinHabit(habit)}
-                    >
-                      <Text style={styles.logButtonText}>{alreadyComplete && isCheckinHabit(habit) ? 'Completed' : 'Quick Log'}</Text>
-                </TouchableOpacity>
+                <Text style={styles.habitStats}>
+                  🔥 {habit.streak} • {habit.totalLogged} total
+                </Text>
+                {renderGoalModule(habit)}
+                <View style={styles.heatmapWrap}>
+                  {renderHeatmapTiles(habit.id)}
+                </View>
               </View>
                 );
               })}
@@ -980,8 +995,7 @@ export default function App() {
                 }}
                 disabled={disabled}
             >
-              <Text style={styles.quickTapEmoji}>{habit.emoji}</Text>
-                <Text style={styles.quickTapName}>{disabled ? `${habit.name} ✔︎` : habit.name}</Text>
+              <Text style={styles.quickTapName}>{habit.name}</Text>
                 {renderGoalModule(habit, 'compact')}
             </TouchableOpacity>
             );
@@ -1053,8 +1067,47 @@ export default function App() {
       return isSameDay(entryDate, new Date()) ? sum + entry.value : sum;
     }, 0);
 
-    const percent = Math.min(100, Math.round((totalToday / goal.target_value) * 100));
-    return { value: totalToday, target: goal.target_value, percent, unit: goal.target_unit, goal };
+    const percent = Math.round((totalToday / goal.target_value) * 100);
+    return { value: totalToday, target: goal.target_value, percent, unit: goal.target_unit };
+  };
+
+  const renderGoalModule = (habit: UserHabit, size: 'default' | 'compact' = 'default') => {
+    const goal = habitGoals[habit.id];
+    const containerStyle = [styles.goalModule, size === 'compact' && styles.goalModuleCompact];
+
+    if (!goal || goal.period !== 'daily' || goal.target_value <= 0) {
+      return (
+        <TouchableOpacity style={containerStyle} onPress={() => setGoalModalHabit(habit)}>
+          <Text style={styles.goalModuleAction}>Set goal</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    const { percent, value, target, unit } = getTodayProgress(habit.id);
+    const clampedPercent = Math.min(percent, 100);
+    const isOverflow = percent >= 100;
+
+    return (
+      <View style={containerStyle}>
+        <View style={[styles.goalModuleTrack, size === 'compact' && styles.goalModuleTrackCompact]}>
+          <View
+            style={[
+              styles.goalModuleFill,
+              isOverflow && styles.goalModuleFillOver,
+              { width: `${clampedPercent}%` },
+            ]}
+          />
+        </View>
+        <View style={styles.goalModuleFooter}>
+          <Text style={styles.goalModuleText}>
+            {value}{unit ? unit : ''} / {target}{unit ? unit : ''}
+          </Text>
+          <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
+            <Text style={styles.goalModuleAction}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
   const renderHabitProgressBar = (habit: UserHabit) => {
@@ -1077,38 +1130,6 @@ export default function App() {
     );
   };
 
-  const renderGoalModule = (habit: UserHabit, size: 'default' | 'compact' = 'default') => {
-    const goal = habitGoals[habit.id];
-    const containerStyle = [styles.goalBlock, size === 'compact' && styles.goalBlockCompact];
-
-    if (!goal || goal.period !== 'daily' || goal.target_value <= 0) {
-      return (
-        <TouchableOpacity style={containerStyle} onPress={() => setGoalModalHabit(habit)}>
-          <Text style={styles.goalActionLink}>Set goal</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    const { percent, value, target, unit } = getTodayProgress(habit.id);
-    const clampedPercent = Math.min(percent, 100);
-    const isOver = percent >= 100;
-    return (
-      <View style={containerStyle}>
-        <View style={[styles.goalBarTrack, isOver && styles.goalBarTrackOver]}
-        >
-          <View style={[styles.goalBarFill, isOver && styles.goalBarFillOver, { width: `${clampedPercent}%` }]} />
-        </View>
-        <View style={styles.goalFoot}>
-          <Text style={styles.goalFootText}>
-            {value}{unit ? unit : ''} / {target}{unit ? unit : ''}
-          </Text>
-          <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
-            <Text style={styles.goalActionLink}>Edit</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  };
 
 const renderRecentActivityModal = () => {
   const filteredEntries = modalEntries;
@@ -1449,6 +1470,54 @@ const renderRecentActivityModal = () => {
       Alert.alert('Error', 'Unable to save goal right now.');
       console.error('Goal save error:', error);
     }
+  };
+
+  const buildHeatmap = (
+    grouped: Record<string, LogEntry[]>,
+    habits: UserHabit[],
+    goalMap: Record<string, HabitGoal | null>,
+    startDate: Date,
+    endDate: Date,
+  ) => {
+    const result: Record<string, HeatmapDay[]> = {};
+
+    habits.forEach(habit => {
+      const days: HeatmapDay[] = [];
+      const entries = grouped[habit.id] || [];
+      const goal = goalMap[habit.id];
+
+      for (let offset = 0; offset <= 29; offset++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + offset);
+        const dateString = currentDate.toISOString().split('T')[0];
+        const dailyEntries = entries.filter(entry => isSameDay(new Date(entry.logged_at), currentDate));
+        const total = dailyEntries.reduce((sum, entry) => sum + entry.value, 0);
+        const streak = calculateStreak(entries.filter(entry => new Date(entry.logged_at) <= currentDate), currentDate);
+        const target = goal && goal.period === 'daily' ? goal.target_value : null;
+        const percent = target ? Math.round((total / target) * 100) : 0;
+
+        days.push({
+          date: dateString,
+          streak,
+          goalPercent: percent,
+          value: total,
+          target,
+        });
+      }
+
+      result[habit.id] = days;
+    });
+
+    return result;
+  };
+
+  const renderHeatmapTiles = (habitId: string) => {
+    const days = heatmapData[habitId] || [];
+    if (!days.length) return null;
+
+    return days.map(day => (
+      <HeatmapTile key={day.date} day={day} size={28} />
+    ));
   };
 
   let content: JSX.Element;
@@ -1805,19 +1874,35 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    gap: 10,
+  },
+  habitRowHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  habitLogPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#f7fafc',
   },
   habitInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  habitTextGroup: {
     flex: 1,
+    gap: 4,
+    marginRight: 12,
   },
   habitStats: {
     fontSize: 14,
@@ -1862,32 +1947,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 32,
   },
-  addHabitBanner: {
-    backgroundColor: '#ebf8ff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#bee3f8',
-  },
-  addHabitBannerText: {
-    color: '#2b6cb0',
-    fontSize: 15,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
   quickTapCard: {
     backgroundColor: 'white',
     width: '48%',
-    padding: 24,
+    padding: 20,
     borderRadius: 16,
-    alignItems: 'center',
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+    gap: 8,
   },
   quickTapEmoji: {
     fontSize: 40,
@@ -1897,7 +1968,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#2d3748',
-    textAlign: 'center',
   },
   toast: {
     position: 'absolute',
@@ -2446,6 +2516,7 @@ const styles = StyleSheet.create({
   },
   goalBlock: {
     marginTop: 8,
+    width: '100%',
   },
   goalBlockCompact: {
     marginTop: 12,
@@ -2623,5 +2694,60 @@ const styles = StyleSheet.create({
   },
   goalPresetTextActive: {
     color: 'white',
+  },
+  heatmapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 8,
+    maxWidth: '100%',
+  },
+  heatmapScroll: {
+    marginTop: 8,
+  },
+  goalModule: {
+    marginTop: 6,
+    gap: 4,
+  },
+  goalModuleCompact: {
+    marginTop: 8,
+  },
+  goalModuleTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#edf2f7',
+    overflow: 'hidden',
+  },
+  goalModuleTrackCompact: {
+    height: 4,
+  },
+  goalModuleFill: {
+    height: '100%',
+    backgroundColor: '#48bb78',
+  },
+  goalModuleFillOver: {
+    backgroundColor: '#f6ad55',
+  },
+  goalModuleFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  goalModuleText: {
+    fontSize: 12,
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  goalModuleAction: {
+    fontSize: 12,
+    color: '#3182ce',
+    fontWeight: '600',
+  },
+  heatmapWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 8,
+    maxWidth: '100%',
   },
 });

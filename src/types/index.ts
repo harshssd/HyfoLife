@@ -44,6 +44,14 @@ export interface HabitGoal {
   updated_at: string;
 }
 
+export interface HeatmapDay {
+  date: string;
+  streak: number;
+  goalPercent: number;
+  value: number;
+  target?: number | null;
+}
+
 export interface LogEntry {
   id: string;
   habit_id: string;
