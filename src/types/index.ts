@@ -33,6 +33,17 @@ export interface UserHabit {
   streakAnimation?: string;
 }
 
+export interface HabitGoal {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  target_value: number;
+  target_unit: string;
+  period: 'daily' | 'weekly' | 'monthly';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LogEntry {
   id: string;
   habit_id: string;

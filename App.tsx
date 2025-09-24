@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, FlatList } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, FlatList } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
-import { UserHabit, LogEntry, VisualTheme } from './src/types';
+import { UserHabit, LogEntry, VisualTheme, HabitGoal } from './src/types';
 import QuickLogModal from './src/components/QuickLogModal';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
-  return habit.inputMode === 'checkin';
+  return habit.inputMode === 'check' || habit.inputMode === 'checkin';
 };
 
 const hasMetGoalForToday = (
@@ -61,6 +61,8 @@ export default function App() {
   const [undoVisible, setUndoVisible] = useState(false);
   const [isQuickLogPickerVisible, setIsQuickLogPickerVisible] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'recent'>('overview');
+  const [habitGoals, setHabitGoals] = useState<Record<string, HabitGoal | null>>({});
+  const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -112,14 +114,14 @@ export default function App() {
         );
 
         return {
-        id: habit.id,
+          id: habit.id,
           name: habitName,
           emoji: habit.emoji || fallbackEmoji,
-        alias: habit.alias,
+          alias: habit.alias,
           streak: 0,
           totalLogged: 0,
           lastLogged: habit.last_logged_at || habit.created_at,
-        createdAt: habit.created_at,
+          createdAt: habit.created_at,
           unit: habit.unit || starterHabit?.unit,
           unitLabel: habit.goal_unit_label || starterHabit?.displayUnit,
           unitPlural: starterHabit?.displayUnitPlural,
@@ -132,9 +134,32 @@ export default function App() {
       });
       
       setUserHabits(habits);
-      await loadHabitEntries(targetUserId, habits);
+      await Promise.all([
+        loadHabitEntries(targetUserId, habits),
+        loadHabitGoals(targetUserId),
+      ]);
     } catch (error) {
       console.error('Error loading habits:', error);
+    }
+  };
+
+  const loadHabitGoals = async (targetUserId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('habit_goals')
+        .select('*')
+        .eq('user_id', targetUserId);
+
+      if (error) throw error;
+
+      const goalMap: Record<string, HabitGoal> = {};
+      (data ?? []).forEach(goal => {
+        goalMap[goal.habit_id] = goal;
+      });
+
+      setHabitGoals(goalMap);
+    } catch (error) {
+      console.error('Error loading habit goals:', error);
     }
   };
 
@@ -897,9 +922,10 @@ export default function App() {
                     <Text style={styles.habitStats}>
                       {habit.streak} day streak • {habit.totalLogged} total
                     </Text>
-                        {alreadyComplete && (
-                          <Text style={styles.habitBadge}>Done for today 🔥</Text>
-                        )}
+                    {renderGoalModule(habit)}
+                    {alreadyComplete && (
+                      <Text style={styles.habitBadge}>Done for today 🔥</Text>
+                    )}
                   </View>
                 </View>
                 <TouchableOpacity
@@ -956,6 +982,7 @@ export default function App() {
             >
               <Text style={styles.quickTapEmoji}>{habit.emoji}</Text>
                 <Text style={styles.quickTapName}>{disabled ? `${habit.name} ✔︎` : habit.name}</Text>
+                {renderGoalModule(habit, 'compact')}
             </TouchableOpacity>
             );
           })}
@@ -1014,6 +1041,73 @@ export default function App() {
     }));
 
     setModalEntries(entries);
+  };
+
+  const getTodayProgress = (habitId: string) => {
+    const goal = habitGoals[habitId];
+    if (!goal || goal.period !== 'daily') return { value: 0, target: null, percent: 0, unit: goal?.target_unit };
+
+    const entries = entriesByHabit[habitId] || todayEntries.filter(entry => entry.habit_id === habitId);
+    const totalToday = entries.reduce((sum, entry) => {
+      const entryDate = new Date(entry.logged_at);
+      return isSameDay(entryDate, new Date()) ? sum + entry.value : sum;
+    }, 0);
+
+    const percent = Math.min(100, Math.round((totalToday / goal.target_value) * 100));
+    return { value: totalToday, target: goal.target_value, percent, unit: goal.target_unit, goal };
+  };
+
+  const renderHabitProgressBar = (habit: UserHabit) => {
+    const goal = habitGoals[habit.id];
+    if (!goal || goal.period !== 'daily' || goal.target_value <= 0) return null;
+
+    const { percent, value, target, unit } = getTodayProgress(habit.id);
+    return (
+      <View style={styles.goalContainer}>
+        <View style={styles.goalHeader}>
+          <Text style={styles.goalLabel}>Daily goal</Text>
+          <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
+            <Text style={styles.goalValue}>{value}{unit ? `/${target}${unit}` : `/${target}`}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.goalBarTrack}>
+          <View style={[styles.goalBarFill, { width: `${percent}%` }]} />
+        </View>
+      </View>
+    );
+  };
+
+  const renderGoalModule = (habit: UserHabit, size: 'default' | 'compact' = 'default') => {
+    const goal = habitGoals[habit.id];
+    const containerStyle = [styles.goalBlock, size === 'compact' && styles.goalBlockCompact];
+
+    if (!goal || goal.period !== 'daily' || goal.target_value <= 0) {
+      return (
+        <TouchableOpacity style={containerStyle} onPress={() => setGoalModalHabit(habit)}>
+          <Text style={styles.goalActionLink}>Set goal</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    const { percent, value, target, unit } = getTodayProgress(habit.id);
+    const clampedPercent = Math.min(percent, 100);
+    const isOver = percent >= 100;
+    return (
+      <View style={containerStyle}>
+        <View style={[styles.goalBarTrack, isOver && styles.goalBarTrackOver]}
+        >
+          <View style={[styles.goalBarFill, isOver && styles.goalBarFillOver, { width: `${clampedPercent}%` }]} />
+        </View>
+        <View style={styles.goalFoot}>
+          <Text style={styles.goalFootText}>
+            {value}{unit ? unit : ''} / {target}{unit ? unit : ''}
+          </Text>
+          <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
+            <Text style={styles.goalActionLink}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
   };
 
 const renderRecentActivityModal = () => {
@@ -1142,6 +1236,10 @@ const renderRecentActivityModal = () => {
                     ) : (
                       <Text style={styles.pickerHabitMeta}>{habit.streak} day streak • {habit.totalLogged} total</Text>
                     )}
+                    {renderGoalModule(habit, 'compact')}
+                    <TouchableOpacity style={styles.goalEditChip} onPress={() => setGoalModalHabit(habit)}>
+                      <Text style={styles.goalEditChipText}>{habitGoals[habit.id] ? 'Edit goal' : 'Set goal'}</Text>
+                    </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
               );
@@ -1155,6 +1253,203 @@ const renderRecentActivityModal = () => {
       </View>
     </Modal>
   );
+
+  const GoalSettingModal = ({
+    visible,
+    habit,
+    goal,
+    onClose,
+    onSave,
+  }: {
+    visible: boolean;
+    habit: UserHabit | null;
+    goal: HabitGoal | null;
+    onClose: () => void;
+    onSave: (targetValue: number, targetUnit: string, period: HabitGoal['period']) => Promise<void> | void;
+  }) => {
+    const [targetValue, setTargetValue] = useState(goal?.target_value ?? 50);
+    const [targetUnit, setTargetUnit] = useState(goal?.target_unit || habit?.unitLabel || 'reps');
+    const [period, setPeriod] = useState<HabitGoal['period']>(goal?.period || 'daily');
+
+    useEffect(() => {
+      setTargetValue(goal?.target_value ?? 50);
+      setTargetUnit(goal?.target_unit || habit?.unitLabel || 'reps');
+      setPeriod(goal?.period || 'daily');
+    }, [goal, habit]);
+
+    if (!habit) return null;
+
+    const presets = useMemo(() => {
+      const defaults = [10, 25, 50, 100];
+      if (habit.quickIncrement && habit.quickIncrement > 1) {
+        return [habit.quickIncrement, habit.quickIncrement * 3, habit.quickIncrement * 5, habit.quickIncrement * 10];
+      }
+      return defaults;
+    }, [habit.quickIncrement]);
+
+    const handlePreset = (value: number) => {
+      setTargetValue(value);
+    };
+
+    const handleSave = () => {
+      onSave(targetValue, targetUnit.trim(), period);
+    };
+
+    const handleRemove = () => {
+      onSave(0, '', period);
+    };
+
+    return (
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.goalBackdrop}>
+            <KeyboardAvoidingView
+              style={styles.goalSheetWrapper}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+            >
+              <TouchableWithoutFeedback>
+                <View style={styles.goalSheet}>
+                  <View style={styles.goalSheetHeader}>
+                    <Text style={styles.goalSheetTitle}>{habit.emoji} {habit.name}</Text>
+                    <TouchableOpacity onPress={onClose}>
+                      <Text style={styles.goalSheetClose}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.goalSheetSubtitle}>Set a daily target to unlock progress animations.</Text>
+
+                  <View style={styles.goalNumberEditor}>
+                    <Text style={styles.goalNumberLabel}>Target value</Text>
+                    <View style={styles.goalNumberRow}>
+                      <TouchableOpacity
+                        style={styles.goalNumberButton}
+                        onPress={() => setTargetValue(Math.max(1, targetValue - (habit.quickIncrement || 1)))}
+                      >
+                        <Text style={styles.goalNumberButtonText}>-</Text>
+                      </TouchableOpacity>
+                      <TextInput
+                        value={String(targetValue)}
+                        onChangeText={(text) => setTargetValue(Number(text.replace(/[^0-9.]/g, '') || '0'))}
+                        keyboardType="decimal-pad"
+                        style={styles.goalNumberInput}
+                      />
+                      <TouchableOpacity
+                        style={styles.goalNumberButton}
+                        onPress={() => setTargetValue(targetValue + (habit.quickIncrement || 1))}
+                      >
+                        <Text style={styles.goalNumberButtonText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.goalPresetsRow}>
+                    {presets.map(value => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.goalPresetChip, targetValue === value && styles.goalPresetChipActive]}
+                        onPress={() => handlePreset(value)}
+                      >
+                        <Text style={[styles.goalPresetText, targetValue === value && styles.goalPresetTextActive]}>{value}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.goalModalLabel}>Unit</Text>
+                  <TextInput
+                    value={targetUnit}
+                    onChangeText={setTargetUnit}
+                    style={styles.goalModalInput}
+                  />
+
+                  <Text style={styles.goalModalLabel}>Period</Text>
+                  <View style={styles.goalModalChipRow}>
+                    {(['daily', 'weekly', 'monthly'] as const).map(value => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.goalModalChip, period === value && styles.goalModalChipActive]}
+                        onPress={() => setPeriod(value)}
+                      >
+                        <Text style={[styles.goalModalChipText, period === value && styles.goalModalChipTextActive]}>
+                          {value.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.goalModalSaveButton}
+                    onPress={handleSave}
+                  >
+                    <Text style={styles.goalModalSaveText}>Save goal</Text>
+                  </TouchableOpacity>
+
+                  {goal && (
+                    <TouchableOpacity
+                      style={styles.goalModalDeleteButton}
+                      onPress={handleRemove}
+                    >
+                      <Text style={styles.goalModalDeleteText}>Remove goal</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+    );
+  };
+
+  const handleGoalSave = async (habit: UserHabit, targetValue: number, targetUnit: string, period: HabitGoal['period']) => {
+    if (!user) return;
+
+    try {
+      const sanitizedUnit = targetUnit.trim().slice(0, 5);
+      if (targetValue <= 0 || !sanitizedUnit) {
+        await supabase
+          .from('habit_goals')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('habit_id', habit.id);
+
+        setHabitGoals(prev => ({ ...prev, [habit.id]: null }));
+      } else {
+        const payload = {
+          habit_id: habit.id,
+          user_id: user.id,
+          target_value: targetValue,
+          target_unit: sanitizedUnit,
+          period,
+        };
+
+        const existing = habitGoals[habit.id];
+        if (existing) {
+          const { error } = await supabase
+            .from('habit_goals')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', existing.id);
+
+          if (error) throw error;
+          setHabitGoals(prev => ({ ...prev, [habit.id]: { ...existing, ...payload } }));
+        } else {
+          const { data, error } = await supabase
+            .from('habit_goals')
+            .insert(payload)
+            .select()
+            .single();
+
+          if (error) throw error;
+          setHabitGoals(prev => ({ ...prev, [habit.id]: data as HabitGoal }));
+        }
+      }
+
+      setGoalModalHabit(null);
+    } catch (error) {
+      Alert.alert('Error', 'Unable to save goal right now.');
+      console.error('Goal save error:', error);
+    }
+  };
 
   let content: JSX.Element;
   switch (appState) {
@@ -1236,6 +1531,18 @@ const renderRecentActivityModal = () => {
       />
       {renderRecentActivityModal()}
       {renderQuickLogPicker()}
+      <GoalSettingModal
+        visible={!!goalModalHabit}
+        habit={goalModalHabit}
+        goal={goalModalHabit ? habitGoals[goalModalHabit.id] || null : null}
+        onClose={() => setGoalModalHabit(null)}
+        onSave={async (value, unit, period) => {
+          if (goalModalHabit) {
+            await handleGoalSave(goalModalHabit, value, unit, period);
+            setGoalModalHabit(null);
+          }
+        }}
+      />
     </>
   );
 }
@@ -2079,5 +2386,242 @@ const styles = StyleSheet.create({
   viewFullActivityText: {
     color: '#4299e1',
     fontWeight: '600',
+  },
+  goalContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  goalLabel: {
+    fontSize: 12,
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  goalValue: {
+    fontSize: 12,
+    color: '#2d3748',
+    fontWeight: '600',
+  },
+  goalBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#edf2f7',
+    overflow: 'hidden',
+  },
+  goalBarTrackOver: {
+    height: 8,
+  },
+  goalBarFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#48bb78',
+  },
+  goalBarFillOver: {
+    backgroundColor: '#f6ad55',
+    shadowColor: '#f6ad55',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+  },
+  goalFoot: {
+    marginTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  goalFootText: {
+    fontSize: 12,
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  goalActionLink: {
+    fontSize: 12,
+    color: '#3182ce',
+    fontWeight: '600',
+  },
+  goalBlock: {
+    marginTop: 8,
+  },
+  goalBlockCompact: {
+    marginTop: 12,
+  },
+  goalEditText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#3182ce',
+    fontWeight: '600',
+  },
+  goalModalContent: {
+    padding: 20,
+    gap: 16,
+  },
+  goalModalLabel: {
+    fontSize: 14,
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  goalModalInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: 'white',
+  },
+  goalModalChipRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  goalModalChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+  },
+  goalModalChipActive: {
+    backgroundColor: '#4299e1',
+    borderColor: '#4299e1',
+  },
+  goalModalChipText: {
+    color: '#2d3748',
+    fontWeight: '600',
+  },
+  goalModalChipTextActive: {
+    color: 'white',
+  },
+  goalModalSaveButton: {
+    backgroundColor: '#48bb78',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  goalModalSaveText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  goalModalDeleteButton: {
+    marginTop: 8,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  goalModalDeleteText: {
+    color: '#e53e3e',
+    fontWeight: '600',
+  },
+  goalEditChip: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+  },
+  goalEditChipText: {
+    color: '#2b6cb0',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  goalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  goalSheetWrapper: {
+    width: '100%',
+  },
+  goalSheet: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    gap: 16,
+  },
+  goalSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  goalSheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2d3748',
+  },
+  goalSheetClose: {
+    fontSize: 20,
+    color: '#a0aec0',
+  },
+  goalSheetSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+  },
+  goalNumberEditor: {
+    gap: 10,
+  },
+  goalNumberLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  goalNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  goalNumberButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#edf2f7',
+  },
+  goalNumberButtonText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2d3748',
+  },
+  goalNumberInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    textAlign: 'center',
+    fontSize: 18,
+    fontWeight: '700',
+    backgroundColor: 'white',
+  },
+  goalPresetsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  goalPresetChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+  },
+  goalPresetChipActive: {
+    backgroundColor: '#4299e1',
+    borderColor: '#4299e1',
+  },
+  goalPresetText: {
+    color: '#2d3748',
+    fontWeight: '600',
+  },
+  goalPresetTextActive: {
+    color: 'white',
   },
 });
