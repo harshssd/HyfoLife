@@ -7,14 +7,31 @@ import { STARTER_HABITS } from './src/data/starterHabits';
 import { UserHabit, LogEntry, VisualTheme } from './src/types';
 import QuickLogModal from './src/components/QuickLogModal';
 
-// MVP App States
-type AppState =
-  | 'onboarding'
-  | 'login'
-  | 'signup'
-  | 'habit-selection'
-  | 'dashboard'
-  | 'logging';
+const isCheckinHabit = (habit?: UserHabit | null) => {
+  if (!habit) return false;
+  return habit.inputMode === 'check' || habit.inputMode === 'checkin';
+};
+
+const hasMetGoalForToday = (
+  habit: UserHabit | null | undefined,
+  entriesByHabitMap: Record<string, LogEntry[]>,
+  todayEntriesList: LogEntry[],
+) => {
+  if (!habit || !habit.goalPerDay || habit.goalPerDay <= 0) return false;
+  const minimumMeaningfulGoal = habit.quickIncrement && habit.quickIncrement > 0 ? habit.quickIncrement : 1;
+  if (habit.goalPerDay <= minimumMeaningfulGoal) return false;
+
+  const entries = entriesByHabitMap[habit.id] || todayEntriesList.filter(entry => entry.habit_id === habit.id);
+  const totalToday = entries.reduce((sum, entry) => {
+    const entryDate = new Date(entry.logged_at);
+    return (
+      entryDate.getFullYear() === new Date().getFullYear() &&
+      entryDate.getMonth() === new Date().getMonth() &&
+      entryDate.getDate() === new Date().getDate()
+    ) ? sum + entry.value : sum;
+  }, 0);
+  return totalToday >= habit.goalPerDay;
+};
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('onboarding');
@@ -864,13 +881,12 @@ export default function App() {
         ) : (
           <View style={styles.habitsList}>
               {userHabits.map((habit) => {
-                const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
                 const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
                 const now = new Date();
-                const alreadyLoggedToday = Boolean(
-                  lastLogged &&
-                  isSameDay(lastLogged, now)
-                );
+                const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
+                const alreadyComplete = isCheckinHabit(habit)
+                  ? alreadyLoggedToday
+                  : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
 
                 return (
               <View key={habit.id} style={styles.habitRow}>
@@ -881,20 +897,20 @@ export default function App() {
                     <Text style={styles.habitStats}>
                       {habit.streak} day streak • {habit.totalLogged} total
                     </Text>
-                        {alreadyLoggedToday && (
+                        {alreadyComplete && (
                           <Text style={styles.habitBadge}>Done for today 🔥</Text>
                         )}
                   </View>
                 </View>
                 <TouchableOpacity
-                      style={[styles.logButton, (alreadyLoggedToday && isCheckin) && styles.logButtonDisabled]}
+                      style={[styles.logButton, (alreadyComplete && isCheckinHabit(habit)) && styles.logButtonDisabled]}
                       onPress={() => {
-                        if (alreadyLoggedToday && isCheckin) return;
+                        if (alreadyComplete && isCheckinHabit(habit)) return;
                         setActiveLogHabit(habit);
                       }}
-                      disabled={alreadyLoggedToday && isCheckin}
+                      disabled={alreadyComplete && isCheckinHabit(habit)}
                     >
-                      <Text style={styles.logButtonText}>{alreadyLoggedToday && isCheckin ? 'Completed' : 'Quick Log'}</Text>
+                      <Text style={styles.logButtonText}>{alreadyComplete && isCheckinHabit(habit) ? 'Completed' : 'Quick Log'}</Text>
                 </TouchableOpacity>
               </View>
                 );
@@ -920,14 +936,13 @@ export default function App() {
         
         <View style={styles.quickTapGrid}>
           {userHabits.map((habit) => {
-            const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
             const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
             const now = new Date();
-            const alreadyLoggedToday = Boolean(
-              lastLogged &&
-              isSameDay(lastLogged, now)
-            );
-            const disabled = alreadyLoggedToday && isCheckin;
+            const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
+            const alreadyComplete = isCheckinHabit(habit)
+              ? alreadyLoggedToday
+              : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
+            const disabled = alreadyComplete && isCheckinHabit(habit);
 
             return (
             <TouchableOpacity
@@ -1100,10 +1115,13 @@ const renderRecentActivityModal = () => {
 
           <ScrollView style={{ maxHeight: 320 }}>
             {userHabits.map(habit => {
-              const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
               const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
-              const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, new Date()));
-              const disabled = alreadyLoggedToday && isCheckin;
+              const now = new Date();
+              const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
+              const alreadyComplete = isCheckinHabit(habit)
+                ? alreadyLoggedToday
+                : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
+              const disabled = alreadyComplete && isCheckinHabit(habit);
 
               return (
                 <TouchableOpacity
