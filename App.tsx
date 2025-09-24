@@ -62,7 +62,6 @@ export default function App() {
   const [lastLoggedEntry, setLastLoggedEntry] = useState<LogEntry | null>(null);
   const [undoVisible, setUndoVisible] = useState(false);
   const [isQuickLogPickerVisible, setIsQuickLogPickerVisible] = useState(false);
-  const [dashboardTab, setDashboardTab] = useState<'overview' | 'recent'>('overview');
   const [habitGoals, setHabitGoals] = useState<Record<string, HabitGoal | null>>({});
   const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
   const [heatmapData, setHeatmapData] = useState<Record<string, HeatmapDay[]>>({});
@@ -831,23 +830,6 @@ export default function App() {
   const totalHabits = userHabits.length;
   const totalLogs = habitEntries.length;
 
-  const DashboardTabs = ({ activeTab, onChange }: { activeTab: 'overview' | 'recent'; onChange: (tab: 'overview' | 'recent') => void }) => (
-    <View style={styles.tabsContainer}>
-      <TouchableOpacity
-        style={[styles.tabButton, activeTab === 'overview' && styles.tabButtonActive]}
-        onPress={() => onChange('overview')}
-      >
-        <Text style={[styles.tabLabel, activeTab === 'overview' && styles.tabLabelActive]}>Overview</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.tabButton, activeTab === 'recent' && styles.tabButtonActive]}
-        onPress={() => onChange('recent')}
-      >
-        <Text style={[styles.tabLabel, activeTab === 'recent' && styles.tabLabelActive]}>Recent</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
   const renderDashboardDonut = () => {
     const size = 64;
     const strokeWidth = 8;
@@ -918,11 +900,12 @@ export default function App() {
             <View style={styles.heroDonutWrapper}>
               {renderDashboardDonut()}
               <Text
-                style={[
-                  styles.heroDonutCaption,
-                  todayGoalsSummary.total > 0 && todayGoalsSummary.completed >= todayGoalsSummary.total
-                    ? styles.heroDonutCaptionComplete
-                    : styles.heroDonutCaptionPending,
+                style={[styles.heroDonutCaption,
+                  todayGoalsSummary.total <= 0
+                    ? styles.heroDonutCaptionNeutral
+                    : todayGoalsSummary.completed >= todayGoalsSummary.total
+                      ? styles.heroDonutCaptionComplete
+                      : styles.heroDonutCaptionPending,
                 ]}
               >
                 {todayGoalsSummary.total > 0
@@ -948,46 +931,8 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <DashboardTabs activeTab={dashboardTab} onChange={setDashboardTab} />
-
-        {dashboardTab === 'recent' ? (
-          recentEntries.length > 0 ? (
-            <View style={styles.recentLogsSection}>
-              <View style={styles.recentLogsHeader}>
-                <Text style={styles.sectionTitle}>Recent Activity</Text>
-                <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
-                  <Text style={styles.viewAllText}>See all</Text>
-                </TouchableOpacity>
-              </View>
-              {recentEntries.map(entry => (
-                <View key={entry.id} style={styles.logRow}>
-                  <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
-                  <View style={styles.logRowInfo}>
-                    <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
-                    <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
-                  </View>
-                  <View style={styles.logRowActions}>
-                    <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                    <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
-                      <Text style={styles.deleteButtonText}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🕒</Text>
-              <Text style={styles.emptyTitle}>No logs yet</Text>
-              <Text style={styles.emptyText}>Log your first habit to see activity here.</Text>
-              <TouchableOpacity style={styles.primaryButton} onPress={handleQuickLogButtonPress}>
-                <Text style={styles.buttonText}>Log something</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        ) : (
-          userHabits.length === 0 ? (
+        
+        {userHabits.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌱</Text>
             <Text style={styles.emptyTitle}>No habits yet</Text>
@@ -1000,6 +945,7 @@ export default function App() {
             </TouchableOpacity>
           </View>
         ) : (
+          <>
           <View style={styles.habitsList}>
               {userHabits.map((habit) => {
                 const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
@@ -1011,58 +957,86 @@ export default function App() {
 
                 return (
               <View key={habit.id} style={styles.habitRow}>
-                <View style={styles.habitRowHeader}>
-                  <View style={styles.habitTitleGroup}>
+                    <View style={styles.habitRowHeader}>
+                      <View style={styles.habitTitleGroup}>
                     <Text style={styles.habitName}>{habit.name}</Text>
-                    <View style={styles.habitFlameRow}>
-                      <Animated.Text
-                        style={[
-                          styles.habitFlame,
-                          {
-                            transform: [
+                        <View style={styles.habitFlameRow}>
+                          <Animated.Text
+                            style={[
+                              styles.habitFlame,
                               {
-                                scale: flameAnimRefs.current[habit.id]
-                                  ? flameAnimRefs.current[habit.id].interpolate({
-                                      inputRange: [0, 1],
-                                      outputRange: [1, 1.3],
-                                    })
-                                  : 1,
+                                transform: [
+                                  {
+                                    scale: flameAnimRefs.current[habit.id]
+                                      ? flameAnimRefs.current[habit.id].interpolate({
+                                          inputRange: [0, 1],
+                                          outputRange: [1, 1.3],
+                                        })
+                                      : 1,
+                                  },
+                                ],
                               },
-                            ],
-                          },
-                        ]}
-                      >
-                        🔥
-                      </Animated.Text>
-                      <View style={styles.habitFlameStats}>
-                        <Text style={styles.habitFlameText}>{habit.streak} day streak</Text>
-                        <Text style={styles.habitFlameSubtext}>{habit.totalLogged} total</Text>
-                      </View>
+                            ]}
+                          >
+                            🔥
+                          </Animated.Text>
+                          <View style={styles.habitFlameStats}>
+                            <Text style={styles.habitFlameText}>{habit.streak} day streak</Text>
+                            <Text style={styles.habitFlameSubtext}>{habit.totalLogged} total</Text>
+                          </View>
                   </View>
                 </View>
                 <TouchableOpacity
-                    style={styles.habitLogPill}
-                    onPress={() => {
-                      const alreadyComplete = isCheckinHabit(habit)
-                        ? Boolean(habit.lastLogged && isSameDay(new Date(habit.lastLogged), new Date()))
-                        : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
-                      if (alreadyComplete && isCheckinHabit(habit)) return;
-                      setActiveLogHabit(habit);
-                    }}
-                  >
-                    <Text style={styles.habitLogPillText}>Log</Text>
+                        style={styles.habitLogPill}
+                        onPress={() => {
+                          const alreadyComplete = isCheckinHabit(habit)
+                            ? Boolean(habit.lastLogged && isSameDay(new Date(habit.lastLogged), new Date()))
+                            : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
+                          if (alreadyComplete && isCheckinHabit(habit)) return;
+                          setActiveLogHabit(habit);
+                        }}
+                      >
+                        <Text style={styles.habitLogPillText}>Log</Text>
                 </TouchableOpacity>
               </View>
 
-                {renderGoalModule(habit)}
-                <View style={styles.heatmapWrap}>
-                  {renderHeatmapTiles(habit.id)}
+                    {renderGoalModule(habit)}
+                    <View style={styles.heatmapWrap}>
+                      {renderHeatmapTiles(habit.id)}
           </View>
-              </View>
+                  </View>
                 );
               })}
-          </View>
-          )
+            </View>
+
+            <View style={styles.recentLogsSection}>
+              <View style={styles.recentLogsHeader}>
+                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
+                  <Text style={styles.viewAllText}>See all</Text>
+        </TouchableOpacity>
+              </View>
+              {recentEntries.length > 0 ? (
+                recentEntries.map(entry => (
+                  <View key={entry.id} style={styles.logRow}>
+                    <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
+                    <View style={styles.logRowInfo}>
+                      <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
+                      <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
+                    </View>
+                    <View style={styles.logRowActions}>
+                      <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
+                        <Text style={styles.deleteButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.recentEmptyText}>No activity logged today.</Text>
+              )}
+            </View>
+          </>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -1070,15 +1044,29 @@ export default function App() {
 
   const renderLogging = () => (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.screenTitle}>Log Your Habits</Text>
-        
-        <TouchableOpacity
-          style={styles.addHabitBanner}
-          onPress={() => setAppState('habit-selection')}
-        >
-          <Text style={styles.addHabitBannerText}>Need another habit? Tap here to add one →</Text>
-        </TouchableOpacity>
+      <ScrollView contentContainerStyle={[styles.scrollContent, styles.loggingScroll]}>
+        <View style={styles.loggingHero}>
+          <View style={styles.loggingHeroCopy}>
+            <Text style={styles.loggingHeroEyebrow}>Logging hub</Text>
+            <Text style={styles.loggingHeroTitle}>Capture today's reps in seconds</Text>
+            <Text style={styles.loggingHeroSubtitle}>
+              Tap a habit card to quick log. Goals and streaks stay in view so every tap keeps momentum.
+            </Text>
+          </View>
+          <View style={styles.loggingHeroActions}>
+            <TouchableOpacity style={styles.loggingPrimaryButton} onPress={() => setAppState('dashboard')}>
+              <Text style={styles.loggingPrimaryText}>Back to dashboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.loggingSecondaryButton} onPress={() => setAppState('habit-selection')}>
+              <Text style={styles.loggingSecondaryText}>+ Add habit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.loggingSectionHeader}>
+          <Text style={styles.loggingSectionTitle}>Quick log habits</Text>
+          <Text style={styles.loggingSectionSubtitle}>Tap to open the quick log modal. Disabled cards are done for today.</Text>
+        </View>
         
         <View style={styles.quickTapGrid}>
           {userHabits.map((habit) => {
@@ -1099,20 +1087,25 @@ export default function App() {
                   setActiveLogHabit(habit);
                 }}
                 disabled={disabled}
-            >
+              >
+                <View style={styles.quickTapHeader}>
               <Text style={styles.quickTapName}>{habit.name}</Text>
-                {renderGoalModule(habit, 'compact')}
-            </TouchableOpacity>
+                  <Text style={disabled ? styles.quickTapStatus : styles.quickTapStatusActive}>
+                    {disabled ? 'Done' : 'Ready'}
+                  </Text>
+                </View>
+                <Text style={styles.quickTapMeta}>🔥 {habit.streak} day streak • {habit.totalLogged} total</Text>
+                <View style={styles.quickTapGoal}>{renderGoalModule(habit, 'compact')}</View>
+                <View style={styles.quickTapFooter}>
+                  <Text style={styles.quickTapActionText}>
+                    {disabled ? 'Come back tomorrow' : 'Tap to log new progress'}
+                  </Text>
+                  <Text style={styles.quickTapChevron}>→</Text>
+                </View>
+              </TouchableOpacity>
             );
           })}
         </View>
-        
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          onPress={() => setAppState('dashboard')}
-        >
-          <Text style={styles.secondaryButtonText}>← Back to Dashboard</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1186,6 +1179,12 @@ export default function App() {
     const percentComplete = total === 0 ? 0 : Math.round((completed / total) * 100);
     return { total, completed, percentComplete };
   }, [userHabits, habitGoals, entriesByHabit, todayEntries]);
+
+  const donutCaptionStatusStyle = useMemo(() => {
+    if (todayGoalsSummary.total <= 0) return styles.heroDonutCaptionNeutral;
+    if (todayGoalsSummary.completed >= todayGoalsSummary.total) return styles.heroDonutCaptionComplete;
+    return styles.heroDonutCaptionPending;
+  }, [todayGoalsSummary]);
 
   const renderGoalModule = (habit: UserHabit, size: 'default' | 'compact' = 'default') => {
     const goal = habitGoals[habit.id];
@@ -1281,17 +1280,17 @@ const renderRecentActivityModal = () => {
                   <Text style={[styles.filterChipText, recentEntriesLimit === window && styles.filterChipTextActive]}>
                     {window === 'today' ? 'Today' : window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'All'}
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
+            </TouchableOpacity>
+          ))}
+        </View>
+        
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.habitFilterRow}>
-              <TouchableOpacity
+        <TouchableOpacity 
                 style={[styles.habitFilterChip, !selectedHabitFilter && styles.habitFilterChipActive]}
                 onPress={() => setSelectedHabitFilter(null)}
-              >
+        >
                 <Text style={[styles.habitFilterText, !selectedHabitFilter && styles.habitFilterTextActive]}>All Habits</Text>
-              </TouchableOpacity>
+        </TouchableOpacity>
               {habitFilters.map(habit => (
                 <TouchableOpacity
                   key={habit.id}
@@ -1326,8 +1325,8 @@ const renderRecentActivityModal = () => {
                 </View>
               ))
             )}
-          </ScrollView>
-        </SafeAreaView>
+      </ScrollView>
+    </SafeAreaView>
       </Modal>
     );
   };
@@ -1383,9 +1382,7 @@ const renderRecentActivityModal = () => {
                       <Text style={styles.pickerHabitMeta}>{habit.streak} day streak • {habit.totalLogged} total</Text>
                     )}
                     {renderGoalModule(habit, 'compact')}
-                    <TouchableOpacity style={styles.goalEditChip} onPress={() => setGoalModalHabit(habit)}>
-                      <Text style={styles.goalEditChipText}>{habitGoals[habit.id] ? 'Edit goal' : 'Set goal'}</Text>
-                    </TouchableOpacity>
+
                   </View>
                 </TouchableOpacity>
               );
@@ -2918,5 +2915,128 @@ const styles = StyleSheet.create({
   },
   heroDonutCaptionComplete: {
     color: '#f6ad55',
+  },
+  heroDonutCaptionNeutral: {
+    color: '#a0aec0',
+  },
+  loggingScroll: {
+    paddingBottom: 80,
+  },
+  loggingHero: {
+    backgroundColor: '#f7fafc',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    gap: 16,
+  },
+  loggingHeroCopy: {
+    gap: 8,
+  },
+  loggingHeroEyebrow: {
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+    color: '#63b3ed',
+  },
+  loggingHeroTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1a202c',
+  },
+  loggingHeroSubtitle: {
+    fontSize: 14,
+    color: '#4a5568',
+    lineHeight: 20,
+  },
+  loggingHeroActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  loggingPrimaryButton: {
+    flex: 1,
+    backgroundColor: '#48bb78',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  loggingPrimaryText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  loggingSecondaryButton: {
+    flexBasis: 160,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    backgroundColor: '#fff',
+  },
+  loggingSecondaryText: {
+    color: '#2b6cb0',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  loggingSectionHeader: {
+    marginBottom: 16,
+    gap: 4,
+  },
+  loggingSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a202c',
+  },
+  loggingSectionSubtitle: {
+    fontSize: 13,
+    color: '#4a5568',
+  },
+  quickTapList: {
+    gap: 14,
+  },
+  quickTapHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  quickTapStatus: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#718096',
+    textTransform: 'uppercase',
+  },
+  quickTapStatusActive: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#48bb78',
+    textTransform: 'uppercase',
+  },
+  quickTapMeta: {
+    fontSize: 13,
+    color: '#4a5568',
+  },
+  quickTapGoal: {
+    marginTop: 4,
+  },
+  quickTapFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  quickTapActionText: {
+    fontSize: 13,
+    color: '#2b6cb0',
+    fontWeight: '600',
+  },
+  quickTapChevron: {
+    fontSize: 18,
+    color: '#a0aec0',
   },
 });
