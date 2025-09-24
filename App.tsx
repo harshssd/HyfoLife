@@ -34,10 +34,12 @@ export default function App() {
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [habitEntries, setHabitEntries] = useState<LogEntry[]>([]);
   const [entriesByHabit, setEntriesByHabit] = useState<Record<string, LogEntry[]>>({});
+  const [todayEntries, setTodayEntries] = useState<LogEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<LogEntry[]>([]);
-  const [recentEntriesLimit, setRecentEntriesLimit] = useState<'week' | 'month' | 'all'>('week');
+  const [recentEntriesLimit, setRecentEntriesLimit] = useState<'today' | 'week' | 'month' | 'all'>('today');
   const [isRecentActivityModalVisible, setIsRecentActivityModalVisible] = useState(false);
   const [selectedHabitFilter, setSelectedHabitFilter] = useState<string | null>(null);
+  const [modalEntries, setModalEntries] = useState<LogEntry[]>([]);
   const [lastLoggedEntry, setLastLoggedEntry] = useState<LogEntry | null>(null);
   const [undoVisible, setUndoVisible] = useState(false);
   const [isQuickLogPickerVisible, setIsQuickLogPickerVisible] = useState(false);
@@ -46,6 +48,14 @@ export default function App() {
   useEffect(() => {
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (!isRecentActivityModalVisible || !user?.id) return;
+
+    fetchModalEntries(user.id, recentEntriesLimit, selectedHabitFilter).catch(err => {
+      console.error('Error fetching modal entries:', err);
+    });
+  }, [isRecentActivityModalVisible, recentEntriesLimit, selectedHabitFilter, user?.id]);
 
   const checkAuth = async () => {
     try {
@@ -113,14 +123,15 @@ export default function App() {
 
   const loadHabitEntries = async (targetUserId: string, habits?: UserHabit[]) => {
     try {
+      const startOfDayUTC = new Date();
+      startOfDayUTC.setHours(0, 0, 0, 0);
+
       const { data, error } = await supabase
         .from('habit_entries')
         .select('*')
         .eq('user_id', targetUserId)
-        .order('logged_at', { ascending: false })
-        .limit(200);
-
-      if (error) throw error;
+        .gte('logged_at', startOfDayUTC.toISOString())
+        .order('logged_at', { ascending: false });
 
       const entries = (data ?? []).map(entry => ({
         ...entry,
@@ -128,6 +139,8 @@ export default function App() {
       }));
 
       setHabitEntries(entries);
+      setTodayEntries(entries);
+      setModalEntries(entries);
 
       const grouped: Record<string, LogEntry[]> = {};
       entries.forEach(entry => {
@@ -785,7 +798,14 @@ export default function App() {
             <TouchableOpacity style={styles.heroCTA} onPress={() => setAppState('habit-selection')}>
               <Text style={styles.heroCTAText}>+ Add habit</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.heroSecondaryCTA} onPress={() => setDashboardTab('recent')}>
+            <TouchableOpacity
+              style={styles.heroSecondaryCTA}
+              onPress={() => {
+                setRecentEntriesLimit('today');
+                setSelectedHabitFilter(null);
+                setIsRecentActivityModalVisible(true);
+              }}
+            >
               <Text style={styles.heroSecondaryText}>View recent →</Text>
             </TouchableOpacity>
           </View>
@@ -937,26 +957,52 @@ export default function App() {
   );
 
   const getFilteredRecentEntries = () => {
-    const limitDate = new Date();
-    const filterWindow = recentEntriesLimit === 'week'
-      ? 7
-      : recentEntriesLimit === 'month'
-      ? 30
-      : null;
-
-    return habitEntries.filter(entry => {
+    return todayEntries.filter(entry => {
       if (selectedHabitFilter && entry.habit_id !== selectedHabitFilter) return false;
-      if (!filterWindow) return true;
-
-      const entryDate = new Date(entry.logged_at);
-      const diffMs = Date.now() - entryDate.getTime();
-      const diffDays = diffMs / (1000 * 60 * 60 * 24);
-      return diffDays <= filterWindow;
+      return true;
     });
   };
 
-  const renderRecentActivityModal = () => {
-    const filteredEntries = getFilteredRecentEntries();
+  const fetchModalEntries = async (
+    userId: string,
+    window: 'today' | 'week' | 'month' | 'all',
+    habitId?: string | null,
+  ) => {
+    const query = supabase
+      .from('habit_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .order('logged_at', { ascending: false })
+      .limit(window === 'all' ? 200 : 100);
+
+    if (habitId) {
+      query.eq('habit_id', habitId);
+    }
+
+    if (window !== 'all') {
+      const startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+      if (window === 'week') {
+        startDate.setDate(startDate.getDate() - 6);
+      } else if (window === 'month') {
+        startDate.setDate(startDate.getDate() - 29);
+      }
+      query.gte('logged_at', startDate.toISOString());
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const entries = (data ?? []).map(entry => ({
+      ...entry,
+      habit: userHabits.find(h => h.id === entry.habit_id),
+    }));
+
+    setModalEntries(entries);
+  };
+
+const renderRecentActivityModal = () => {
+  const filteredEntries = modalEntries;
     const habitFilters = userHabits.map(habit => ({ id: habit.id, name: habit.name, emoji: habit.emoji }));
 
     return (
@@ -971,14 +1017,14 @@ export default function App() {
 
           <ScrollView contentContainerStyle={styles.modalContent}>
             <View style={styles.filterRow}>
-              {(['week', 'month', 'all'] as const).map(window => (
+              {(['today', 'week', 'month', 'all'] as const).map(window => (
                 <TouchableOpacity
                   key={window}
                   style={[styles.filterChip, recentEntriesLimit === window && styles.filterChipActive]}
                   onPress={() => setRecentEntriesLimit(window)}
                 >
                   <Text style={[styles.filterChipText, recentEntriesLimit === window && styles.filterChipTextActive]}>
-                    {window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'All'}
+                    {window === 'today' ? 'Today' : window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'All'}
                   </Text>
                 </TouchableOpacity>
               ))}
