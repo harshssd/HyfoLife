@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, FlatList } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
@@ -35,6 +35,9 @@ export default function App() {
   const [habitEntries, setHabitEntries] = useState<LogEntry[]>([]);
   const [entriesByHabit, setEntriesByHabit] = useState<Record<string, LogEntry[]>>({});
   const [recentEntries, setRecentEntries] = useState<LogEntry[]>([]);
+  const [recentEntriesLimit, setRecentEntriesLimit] = useState<'week' | 'month' | 'all'>('week');
+  const [isRecentActivityModalVisible, setIsRecentActivityModalVisible] = useState(false);
+  const [selectedHabitFilter, setSelectedHabitFilter] = useState<string | null>(null);
 
   useEffect(() => {
     checkAuth();
@@ -129,7 +132,7 @@ export default function App() {
       });
       setEntriesByHabit(grouped);
 
-      setRecentEntries(entries.slice(0, 10));
+      setRecentEntries(entries.slice(0, 3));
 
       if (habits) {
         const updatedHabits = habits.map(habit => {
@@ -687,7 +690,12 @@ export default function App() {
         
         {recentEntries.length > 0 && (
           <View style={styles.recentLogsSection}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+            <View style={styles.recentLogsHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
+                <Text style={styles.viewAllText}>View all</Text>
+              </TouchableOpacity>
+            </View>
             {recentEntries.map(entry => (
               <View key={entry.id} style={styles.logRow}>
                 <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
@@ -816,6 +824,98 @@ export default function App() {
     </SafeAreaView>
   );
 
+  const getFilteredRecentEntries = () => {
+    const limitDate = new Date();
+    const filterWindow = recentEntriesLimit === 'week'
+      ? 7
+      : recentEntriesLimit === 'month'
+      ? 30
+      : null;
+
+    return habitEntries.filter(entry => {
+      if (selectedHabitFilter && entry.habit_id !== selectedHabitFilter) return false;
+      if (!filterWindow) return true;
+
+      const entryDate = new Date(entry.logged_at);
+      const diffMs = Date.now() - entryDate.getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays <= filterWindow;
+    });
+  };
+
+  const renderRecentActivityModal = () => {
+    const filteredEntries = getFilteredRecentEntries();
+    const habitFilters = userHabits.map(habit => ({ id: habit.id, name: habit.name, emoji: habit.emoji }));
+
+    return (
+      <Modal visible={isRecentActivityModalVisible} animationType="slide" onRequestClose={() => setIsRecentActivityModalVisible(false)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Recent Activity</Text>
+            <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(false)}>
+              <Text style={styles.modalClose}>Close</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <View style={styles.filterRow}>
+              {(['week', 'month', 'all'] as const).map(window => (
+                <TouchableOpacity
+                  key={window}
+                  style={[styles.filterChip, recentEntriesLimit === window && styles.filterChipActive]}
+                  onPress={() => setRecentEntriesLimit(window)}
+                >
+                  <Text style={[styles.filterChipText, recentEntriesLimit === window && styles.filterChipTextActive]}>
+                    {window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'All'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.habitFilterRow}>
+              <TouchableOpacity
+                style={[styles.habitFilterChip, !selectedHabitFilter && styles.habitFilterChipActive]}
+                onPress={() => setSelectedHabitFilter(null)}
+              >
+                <Text style={[styles.habitFilterText, !selectedHabitFilter && styles.habitFilterTextActive]}>All Habits</Text>
+              </TouchableOpacity>
+              {habitFilters.map(habit => (
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[styles.habitFilterChip, selectedHabitFilter === habit.id && styles.habitFilterChipActive]}
+                  onPress={() => setSelectedHabitFilter(selectedHabitFilter === habit.id ? null : habit.id)}
+                >
+                  <Text style={[styles.habitFilterText, selectedHabitFilter === habit.id && styles.habitFilterTextActive]}>
+                    {habit.emoji} {habit.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {filteredEntries.length === 0 ? (
+              <View style={styles.emptyModalState}>
+                <Text style={styles.emptyModalText}>No activity in this range.</Text>
+              </View>
+            ) : (
+              filteredEntries.map(entry => (
+                <View key={entry.id} style={styles.modalLogRow}>
+                  <View style={styles.modalLogInfo}>
+                    <Text style={styles.modalLogTitle}>{entry.habit?.emoji || '📝'} {entry.habit?.name || 'Habit'}</Text>
+                    <Text style={styles.modalLogSubtitle}>{formatEntrySummary(entry)}</Text>
+                  </View>
+                  <View style={styles.modalLogMeta}>
+                    <Text style={styles.modalLogDate}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
+                    <Text style={styles.modalLogTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+    );
+  };
+
   let content: JSX.Element;
   switch (appState) {
     case 'onboarding':
@@ -871,6 +971,7 @@ export default function App() {
           </View>
         </View>
       )}
+      {renderRecentActivityModal()}
     </>
   );
 }
@@ -1279,5 +1380,127 @@ const styles = StyleSheet.create({
   logRowTime: {
     fontSize: 12,
     color: '#718096',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f7fafc',
+  },
+  modalHeader: {
+    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    backgroundColor: 'white',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2d3748',
+  },
+  modalClose: {
+    color: '#e53e3e',
+    fontWeight: '600',
+  },
+  modalContent: {
+    padding: 20,
+    gap: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  filterChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#edf2f7',
+  },
+  filterChipActive: {
+    backgroundColor: '#4299e1',
+  },
+  filterChipText: {
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: 'white',
+  },
+  habitFilterRow: {
+    flexGrow: 0,
+  },
+  habitFilterChip: {
+    backgroundColor: '#e2e8f0',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    marginRight: 10,
+  },
+  habitFilterChipActive: {
+    backgroundColor: '#48bb78',
+  },
+  habitFilterText: {
+    color: '#2d3748',
+    fontWeight: '600',
+  },
+  habitFilterTextActive: {
+    color: 'white',
+  },
+  emptyModalState: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyModalText: {
+    color: '#718096',
+  },
+  modalLogRow: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  modalLogInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  modalLogTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  modalLogSubtitle: {
+    fontSize: 14,
+    color: '#4a5568',
+  },
+  modalLogMeta: {
+    alignItems: 'flex-end',
+  },
+  modalLogDate: {
+    fontSize: 13,
+    color: '#4a5568',
+  },
+  modalLogTime: {
+    fontSize: 12,
+    color: '#718096',
+  },
+  recentLogsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  viewAllText: {
+    color: '#4299e1',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
