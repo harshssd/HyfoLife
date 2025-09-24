@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, FlatList } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, FlatList, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
@@ -65,6 +65,7 @@ export default function App() {
   const [habitGoals, setHabitGoals] = useState<Record<string, HabitGoal | null>>({});
   const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
   const [heatmapData, setHeatmapData] = useState<Record<string, HeatmapDay[]>>({});
+  const flameAnimRefs = useRef<Record<string, Animated.Value>>({});
 
   useEffect(() => {
     checkAuth();
@@ -77,6 +78,29 @@ export default function App() {
       console.error('Error fetching modal entries:', err);
     });
   }, [isRecentActivityModalVisible, recentEntriesLimit, selectedHabitFilter, user?.id]);
+
+  useEffect(() => {
+    userHabits.forEach(habit => {
+      if (!flameAnimRefs.current[habit.id]) {
+        flameAnimRefs.current[habit.id] = new Animated.Value(0);
+      }
+      const { percent } = getTodayProgress(habit.id);
+      if (percent >= 100) {
+        Animated.sequence([
+          Animated.timing(flameAnimRefs.current[habit.id], {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(flameAnimRefs.current[habit.id], {
+            toValue: 0,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    });
+  }, [userHabits, habitGoals, entriesByHabit, todayEntries]);
 
   const checkAuth = async () => {
     try {
@@ -932,7 +956,34 @@ export default function App() {
                 return (
               <View key={habit.id} style={styles.habitRow}>
                 <View style={styles.habitRowHeader}>
-                  <Text style={styles.habitName}>{habit.name}</Text>
+                  <View style={styles.habitTitleGroup}>
+                    <Text style={styles.habitName}>{habit.name}</Text>
+                    <View style={styles.habitFlameRow}>
+                      <Animated.Text
+                        style={[
+                          styles.habitFlame,
+                          {
+                            transform: [
+                              {
+                                scale: flameAnimRefs.current[habit.id]
+                                  ? flameAnimRefs.current[habit.id].interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [1, 1.3],
+                                    })
+                                  : 1,
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        🔥
+                      </Animated.Text>
+                      <View style={styles.habitFlameStats}>
+                        <Text style={styles.habitFlameText}>{habit.streak} day streak</Text>
+                        <Text style={styles.habitFlameSubtext}>{habit.totalLogged} total</Text>
+                      </View>
+                    </View>
+                  </View>
                   <TouchableOpacity
                     style={styles.habitLogPill}
                     onPress={() => {
@@ -946,9 +997,7 @@ export default function App() {
                     <Text style={styles.habitLogPillText}>Log</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.habitStats}>
-                  🔥 {habit.streak} • {habit.totalLogged} total
-                </Text>
+
                 {renderGoalModule(habit)}
                 <View style={styles.heatmapWrap}>
                   {renderHeatmapTiles(habit.id)}
@@ -1090,13 +1139,22 @@ export default function App() {
     return (
       <View style={containerStyle}>
         <View style={[styles.goalModuleTrack, size === 'compact' && styles.goalModuleTrackCompact]}>
-          <View
+          <Animated.View
             style={[
               styles.goalModuleFill,
               isOverflow && styles.goalModuleFillOver,
               { width: `${clampedPercent}%` },
             ]}
           />
+          {isOverflow && (
+            <Animated.View
+              style={[styles.goalSparkle, {
+                opacity: flameAnimRefs.current[habit.id]
+                  ? flameAnimRefs.current[habit.id].interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
+                  : 0,
+              }]}
+            />
+          )}
         </View>
         <View style={styles.goalModuleFooter}>
           <Text style={styles.goalModuleText}>
@@ -1884,7 +1942,32 @@ const styles = StyleSheet.create({
   habitRowHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  habitTitleGroup: {
+    flex: 1,
+  },
+  habitFlameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  habitFlame: {
+    fontSize: 24,
+  },
+  habitFlameStats: {
+    justifyContent: 'center',
+  },
+  habitFlameText: {
+    fontSize: 14,
+    color: '#dd6b20',
+    fontWeight: '700',
+  },
+  habitFlameSubtext: {
+    fontSize: 12,
+    color: '#718096',
+    fontWeight: '500',
+    marginTop: 2,
   },
   habitLogPill: {
     borderRadius: 999,
@@ -1903,11 +1986,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
     marginRight: 12,
-  },
-  habitStats: {
-    fontSize: 14,
-    color: '#718096',
-    marginTop: 2,
   },
   logButton: {
     backgroundColor: '#48bb78',
@@ -2749,5 +2827,13 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 8,
     maxWidth: '100%',
+  },
+  goalSparkle: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
   },
 });
