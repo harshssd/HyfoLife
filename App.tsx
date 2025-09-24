@@ -40,6 +40,8 @@ export default function App() {
   const [selectedHabitFilter, setSelectedHabitFilter] = useState<string | null>(null);
   const [lastLoggedEntry, setLastLoggedEntry] = useState<LogEntry | null>(null);
   const [undoVisible, setUndoVisible] = useState(false);
+  const [isQuickLogPickerVisible, setIsQuickLogPickerVisible] = useState(false);
+  const [dashboardTab, setDashboardTab] = useState<'overview' | 'recent'>('overview');
 
   useEffect(() => {
     checkAuth();
@@ -64,7 +66,7 @@ export default function App() {
   const loadUserHabits = async (userId?: string) => {
     const targetUserId = userId || user?.id;
     if (!targetUserId) return;
-
+    
     try {
       const { data, error } = await supabase
         .from('habits')
@@ -83,14 +85,14 @@ export default function App() {
         );
 
         return {
-          id: habit.id,
+        id: habit.id,
           name: habitName,
           emoji: habit.emoji || fallbackEmoji,
-          alias: habit.alias,
+        alias: habit.alias,
           streak: 0,
           totalLogged: 0,
           lastLogged: habit.last_logged_at || habit.created_at,
-          createdAt: habit.created_at,
+        createdAt: habit.created_at,
           unit: habit.unit || starterHabit?.unit,
           unitLabel: habit.goal_unit_label || starterHabit?.displayUnit,
           unitPlural: starterHabit?.displayUnitPlural,
@@ -134,7 +136,7 @@ export default function App() {
       });
       setEntriesByHabit(grouped);
 
-      setRecentEntries(entries.slice(0, 3));
+      setRecentEntries(entries.slice(0, 4));
 
       if (habits) {
         const updatedHabits = habits.map(habit => {
@@ -183,9 +185,9 @@ export default function App() {
           },
         },
       });
-
+      
       if (error) throw error;
-
+      
       if (data.session?.user) {
         setUser(data.session.user);
         resetAuthForm();
@@ -340,13 +342,13 @@ export default function App() {
         })
         .select()
         .single();
-
+      
       if (error) throw error;
-
+      
       setRecentLogCache(prev => ({ ...prev, [cacheKey]: new Date().toISOString() }));
-
+      
       if (!options?.skipReload) {
-        loadUserHabits();
+      loadUserHabits();
       }
 
       return data as LogEntry;
@@ -568,8 +570,8 @@ export default function App() {
         >
           <Text style={styles.buttonText}>Sign Up</Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
+        
+        <TouchableOpacity 
           style={styles.secondaryButton}
           onPress={() => setAppState('login')}
         >
@@ -714,7 +716,7 @@ export default function App() {
             {isLoading ? 'Creating...' : `Create ${selectedHabits.length} Habits`}
           </Text>
         </TouchableOpacity>
-
+        
         <TouchableOpacity 
           style={styles.secondaryButton}
           onPress={() => {
@@ -729,55 +731,105 @@ export default function App() {
     </SafeAreaView>
   );
 
+  const longestStreak = userHabits.reduce((max, habit) => Math.max(max, habit.streak || 0), 0);
+  const totalHabits = userHabits.length;
+  const totalLogs = habitEntries.length;
+
+  const DashboardTabs = ({ activeTab, onChange }: { activeTab: 'overview' | 'recent'; onChange: (tab: 'overview' | 'recent') => void }) => (
+    <View style={styles.tabsContainer}>
+      <TouchableOpacity
+        style={[styles.tabButton, activeTab === 'overview' && styles.tabButtonActive]}
+        onPress={() => onChange('overview')}
+      >
+        <Text style={[styles.tabLabel, activeTab === 'overview' && styles.tabLabelActive]}>Overview</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tabButton, activeTab === 'recent' && styles.tabButtonActive]}
+        onPress={() => onChange('recent')}
+      >
+        <Text style={[styles.tabLabel, activeTab === 'recent' && styles.tabLabelActive]}>Recent</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderDashboard = () => (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.dashboardHeader}>
-          <Text style={styles.screenTitle}>Your Habits</Text>
-          <View style={styles.dashboardActions}>
-            <TouchableOpacity
-              style={styles.smallButton}
-              onPress={() => setAppState('habit-selection')}
-            >
-              <Text style={styles.smallButtonText}>+ Habit</Text>
+        <View style={styles.dashboardHero}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.dashboardHeroLeft}>
+              <Text style={styles.heroGreeting}>Hey {user?.user_metadata?.username || 'Hyfo human'} 👋</Text>
+              <Text style={styles.heroHeadline}>Hyperfocused Life starts today.</Text>
+            </View>
+            <TouchableOpacity style={styles.heroSignOut} onPress={handleSignOut}>
+              <Text style={styles.heroSignOutText}>Sign out</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.signOutButton, isLoading && styles.disabledButton]}
-              onPress={handleSignOut}
-              disabled={isLoading}
-            >
-              <Text style={styles.signOutButtonText}>{isLoading ? '…' : 'Sign Out'}</Text>
+          </View>
+
+          <View style={styles.heroMetricsRow}>
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{longestStreak}</Text>
+              <Text style={styles.heroMetricLabel}>Longest streak</Text>
+            </View>
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{totalLogs}</Text>
+              <Text style={styles.heroMetricLabel}>Entries logged</Text>
+            </View>
+            <View style={styles.heroMetric}>
+              <Text style={styles.heroMetricValue}>{totalHabits}</Text>
+              <Text style={styles.heroMetricLabel}>Active habits</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroActionRow}>
+            <TouchableOpacity style={styles.heroCTA} onPress={() => setAppState('habit-selection')}>
+              <Text style={styles.heroCTAText}>+ Add habit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.heroSecondaryCTA} onPress={() => setDashboardTab('recent')}>
+              <Text style={styles.heroSecondaryText}>View recent →</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
-        {recentEntries.length > 0 && (
-          <View style={styles.recentLogsSection}>
-            <View style={styles.recentLogsHeader}>
-              <Text style={styles.sectionTitle}>Recent Activity</Text>
-              <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
-                <Text style={styles.viewAllText}>View all</Text>
+
+        <DashboardTabs activeTab={dashboardTab} onChange={setDashboardTab} />
+
+        {dashboardTab === 'recent' ? (
+          recentEntries.length > 0 ? (
+            <View style={styles.recentLogsSection}>
+              <View style={styles.recentLogsHeader}>
+                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
+                  <Text style={styles.viewAllText}>See all</Text>
+                </TouchableOpacity>
+              </View>
+              {recentEntries.map(entry => (
+                <View key={entry.id} style={styles.logRow}>
+                  <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
+                  <View style={styles.logRowInfo}>
+                    <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
+                    <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
+                  </View>
+                  <View style={styles.logRowActions}>
+                    <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
+                      <Text style={styles.deleteButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyEmoji}>🕒</Text>
+              <Text style={styles.emptyTitle}>No logs yet</Text>
+              <Text style={styles.emptyText}>Log your first habit to see activity here.</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={handleQuickLogButtonPress}>
+                <Text style={styles.buttonText}>Log something</Text>
               </TouchableOpacity>
             </View>
-            {recentEntries.map(entry => (
-              <View key={entry.id} style={styles.logRow}>
-                <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
-                <View style={styles.logRowInfo}>
-                  <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
-                  <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
-                </View>
-                <View style={styles.logRowActions}>
-                  <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                  <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
-                    <Text style={styles.deleteButtonText}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-        
-        {userHabits.length === 0 ? (
+          )
+        ) : (
+          userHabits.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🌱</Text>
             <Text style={styles.emptyTitle}>No habits yet</Text>
@@ -791,51 +843,45 @@ export default function App() {
           </View>
         ) : (
           <View style={styles.habitsList}>
-            {userHabits.map((habit) => {
-              const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
-              const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
-              const now = new Date();
-              const alreadyLoggedToday = Boolean(
-                lastLogged &&
-                isSameDay(lastLogged, now)
-              );
+              {userHabits.map((habit) => {
+                const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
+                const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
+                const now = new Date();
+                const alreadyLoggedToday = Boolean(
+                  lastLogged &&
+                  isSameDay(lastLogged, now)
+                );
 
-              return (
-                <View key={habit.id} style={styles.habitRow}>
-                  <View style={styles.habitInfo}>
-                    <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-                    <View>
-                      <Text style={styles.habitName}>{habit.name}</Text>
-                      <Text style={styles.habitStats}>
-                        {habit.streak} day streak • {habit.totalLogged} total
-                      </Text>
-                      {alreadyLoggedToday && (
-                        <Text style={styles.habitBadge}>Done for today 🔥</Text>
-                      )}
-                    </View>
+                return (
+              <View key={habit.id} style={styles.habitRow}>
+                <View style={styles.habitInfo}>
+                  <Text style={styles.habitEmoji}>{habit.emoji}</Text>
+                  <View>
+                    <Text style={styles.habitName}>{habit.name}</Text>
+                    <Text style={styles.habitStats}>
+                      {habit.streak} day streak • {habit.totalLogged} total
+                    </Text>
+                        {alreadyLoggedToday && (
+                          <Text style={styles.habitBadge}>Done for today 🔥</Text>
+                        )}
                   </View>
-                  <TouchableOpacity
-                    style={[styles.logButton, (alreadyLoggedToday && isCheckin) && styles.logButtonDisabled]}
-                    onPress={() => {
-                      if (alreadyLoggedToday && isCheckin) return;
-                      setActiveLogHabit(habit);
-                    }}
-                    disabled={alreadyLoggedToday && isCheckin}
-                  >
-                    <Text style={styles.logButtonText}>{alreadyLoggedToday && isCheckin ? 'Completed' : 'Quick Log'}</Text>
-                  </TouchableOpacity>
                 </View>
-              );
-            })}
+                <TouchableOpacity
+                      style={[styles.logButton, (alreadyLoggedToday && isCheckin) && styles.logButtonDisabled]}
+                      onPress={() => {
+                        if (alreadyLoggedToday && isCheckin) return;
+                        setActiveLogHabit(habit);
+                      }}
+                      disabled={alreadyLoggedToday && isCheckin}
+                    >
+                      <Text style={styles.logButtonText}>{alreadyLoggedToday && isCheckin ? 'Completed' : 'Quick Log'}</Text>
+                </TouchableOpacity>
+              </View>
+                );
+              })}
           </View>
+          )
         )}
-        
-        <TouchableOpacity 
-          style={styles.floatingButton}
-          onPress={() => setAppState('logging')}
-        >
-          <Text style={styles.floatingButtonText}>+ Log</Text>
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -851,7 +897,7 @@ export default function App() {
         >
           <Text style={styles.addHabitBannerText}>Need another habit? Tap here to add one →</Text>
         </TouchableOpacity>
-
+        
         <View style={styles.quickTapGrid}>
           {userHabits.map((habit) => {
             const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
@@ -859,25 +905,23 @@ export default function App() {
             const now = new Date();
             const alreadyLoggedToday = Boolean(
               lastLogged &&
-              lastLogged.getDate() === now.getDate() &&
-              lastLogged.getMonth() === now.getMonth() &&
-              lastLogged.getFullYear() === now.getFullYear()
+              isSameDay(lastLogged, now)
             );
             const disabled = alreadyLoggedToday && isCheckin;
 
             return (
-              <TouchableOpacity
-                key={habit.id}
+            <TouchableOpacity
+              key={habit.id}
                 style={[styles.quickTapCard, disabled && styles.quickTapCardDisabled]}
                 onPress={() => {
                   if (disabled) return;
                   setActiveLogHabit(habit);
                 }}
                 disabled={disabled}
-              >
-                <Text style={styles.quickTapEmoji}>{habit.emoji}</Text>
+            >
+              <Text style={styles.quickTapEmoji}>{habit.emoji}</Text>
                 <Text style={styles.quickTapName}>{disabled ? `${habit.name} ✔︎` : habit.name}</Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
             );
           })}
         </View>
@@ -987,6 +1031,67 @@ export default function App() {
     );
   };
 
+  const handleQuickLogButtonPress = () => {
+    if (userHabits.length === 0) {
+      setAppState('habit-selection');
+      return;
+    }
+
+    if (userHabits.length === 1) {
+      setActiveLogHabit(userHabits[0]);
+      return;
+    }
+
+    setIsQuickLogPickerVisible(true);
+  };
+
+  const renderQuickLogPicker = () => (
+    <Modal visible={isQuickLogPickerVisible} animationType="fade" transparent onRequestClose={() => setIsQuickLogPickerVisible(false)}>
+      <View style={styles.pickerBackdrop}>
+        <View style={styles.pickerSheet}>
+          <Text style={styles.pickerTitle}>Quick log</Text>
+          <Text style={styles.pickerSubtitle}>Choose a habit to log right away</Text>
+
+          <ScrollView style={{ maxHeight: 320 }}>
+            {userHabits.map(habit => {
+              const isCheckin = habit.inputMode === 'check' || habit.inputMode === 'checkin';
+              const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
+              const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, new Date()));
+              const disabled = alreadyLoggedToday && isCheckin;
+
+              return (
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[styles.pickerRow, disabled && styles.pickerRowDisabled]}
+                  onPress={() => {
+                    if (disabled) return;
+                    setIsQuickLogPickerVisible(false);
+                    setActiveLogHabit(habit);
+                  }}
+                  disabled={disabled}
+                >
+                  <Text style={styles.pickerEmoji}>{habit.emoji}</Text>
+                  <View style={styles.pickerInfo}>
+                    <Text style={styles.pickerHabitName}>{habit.name}</Text>
+                    {disabled ? (
+                      <Text style={styles.pickerHabitMeta}>Logged today</Text>
+                    ) : (
+                      <Text style={styles.pickerHabitMeta}>{habit.streak} day streak • {habit.totalLogged} total</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          <TouchableOpacity style={styles.pickerCancel} onPress={() => setIsQuickLogPickerVisible(false)}>
+            <Text style={styles.pickerCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   let content: JSX.Element;
   switch (appState) {
     case 'onboarding':
@@ -1031,13 +1136,13 @@ export default function App() {
 
           const createdEntry = await logHabit(activeLogHabit.id, valueToLog, { silent: true, meta, skipReload: true });
           if (createdEntry) {
-            const enrichedEntry = { ...createdEntry, habit: activeLogHabit };
+            const enrichedEntry = { ...createdEntry, habit: activeLogHabit } as LogEntry;
             setHabitEntries(prev => [enrichedEntry, ...prev]);
             setEntriesByHabit(prev => {
               const list = prev[activeLogHabit.id] ? [enrichedEntry, ...prev[activeLogHabit.id]] : [enrichedEntry];
               return { ...prev, [activeLogHabit.id]: list };
             });
-            setRecentEntries(prev => [enrichedEntry, ...prev].slice(0, 3));
+            setRecentEntries(prev => [enrichedEntry, ...prev].slice(0, 4));
             showQuickLogFeedback(activeLogHabit, valueToLog, enrichedEntry);
           }
 
@@ -1058,10 +1163,62 @@ export default function App() {
           </View>
         </View>
       )}
+      <BottomActionBar
+        appState={appState}
+        habits={userHabits}
+        onNavigateLogging={() => setAppState('logging')}
+        onNavigateDashboard={() => setAppState('dashboard')}
+        onOpenQuickLog={handleQuickLogButtonPress}
+      />
       {renderRecentActivityModal()}
+      {renderQuickLogPicker()}
     </>
   );
 }
+
+const BottomActionBar = ({
+  appState,
+  habits,
+  onNavigateLogging,
+  onNavigateDashboard,
+  onOpenQuickLog,
+}: {
+  appState: AppState;
+  habits: UserHabit[];
+  onNavigateLogging: () => void;
+  onNavigateDashboard: () => void;
+  onOpenQuickLog: () => void;
+}) => {
+  if (appState === 'dashboard') {
+    const quickLogLabel = habits.length === 1 ? `Quick log ${habits[0].emoji}` : 'Quick log';
+    return (
+      <SafeAreaView style={styles.bottomBarSafeArea}>
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bottomBarSecondary} onPress={onOpenQuickLog}>
+            <Text style={styles.bottomBarSecondaryText}>{quickLogLabel}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bottomBarPrimary} onPress={onNavigateLogging}>
+            <Text style={styles.bottomBarPrimaryText}>Open logging hub</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (appState === 'logging') {
+    return (
+      <SafeAreaView style={styles.bottomBarSafeArea}>
+        <View style={styles.bottomBar}>
+          <TouchableOpacity style={styles.bottomBarPrimary} onPress={onNavigateDashboard}>
+            <Text style={styles.bottomBarPrimaryText}>Back to dashboard</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return null;
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -1070,7 +1227,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 140,
   },
   logoContainer: {
     alignItems: 'center',
@@ -1628,6 +1785,234 @@ const styles = StyleSheet.create({
   viewAllText: {
     color: '#4299e1',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  bottomBarSafeArea: {
+    backgroundColor: 'white',
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    backgroundColor: 'white',
+  },
+  bottomBarPrimary: {
+    flex: 1,
+    backgroundColor: '#4299e1',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  bottomBarPrimaryText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bottomBarSecondary: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e0',
+    alignItems: 'center',
+  },
+  bottomBarSecondaryText: {
+    color: '#2d3748',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  pickerSheet: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  pickerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2d3748',
+    marginBottom: 4,
+  },
+  pickerSubtitle: {
+    fontSize: 14,
+    color: '#718096',
+    marginBottom: 20,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#edf2f7',
+  },
+  pickerRowDisabled: {
+    opacity: 0.5,
+  },
+  pickerEmoji: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  pickerInfo: {
+    flex: 1,
+  },
+  pickerHabitName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  pickerHabitMeta: {
+    fontSize: 13,
+    color: '#718096',
+  },
+  pickerCancel: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  pickerCancelText: {
+    color: '#e53e3e',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dashboardHero: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
+    gap: 16,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  dashboardHeroLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  heroGreeting: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4a5568',
+  },
+  heroHeadline: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#1a202c',
+    marginTop: 4,
+  },
+  heroSignOut: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  heroSignOutText: {
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  heroMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#f7fafc',
+    borderRadius: 16,
+    padding: 16,
+  },
+  heroMetric: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  heroMetricValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2d3748',
+  },
+  heroMetricLabel: {
+    fontSize: 12,
+    color: '#718096',
+    marginTop: 4,
+  },
+  heroActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroCTA: {
+    flex: 1,
+    backgroundColor: '#48bb78',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  heroCTAText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  heroSecondaryCTA: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#edf2f7',
+  },
+  heroSecondaryText: {
+    color: '#2b6cb0',
+    fontWeight: '600',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 999,
+    padding: 4,
+    marginBottom: 24,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  tabButtonActive: {
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tabLabel: {
+    color: '#4a5568',
+    fontWeight: '600',
+  },
+  tabLabelActive: {
+    color: '#2d3748',
+  },
+  viewFullActivityButton: {
+    alignItems: 'flex-end',
+    marginTop: 12,
+  },
+  viewFullActivityText: {
+    color: '#4299e1',
     fontWeight: '600',
   },
 });
