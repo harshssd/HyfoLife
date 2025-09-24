@@ -9,7 +9,7 @@ import QuickLogModal from './src/components/QuickLogModal';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
-  return habit.inputMode === 'check' || habit.inputMode === 'checkin';
+  return habit.inputMode === 'checkin';
 };
 
 const hasMetGoalForToday = (

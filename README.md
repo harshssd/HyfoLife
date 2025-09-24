@@ -88,8 +88,7 @@ src/
 ## 🔧 Configuration
 
 ### Supabase Setup
-The app uses the same Supabase configuration as the Flutter app:
-- **URL**: `https://iogxtdeurvperjzrjhsl.supabase.co`
+- **URL**: 
 - **Tables**: `habits`, `entries`, `users`
 - **Auth**: Magic link authentication
 
