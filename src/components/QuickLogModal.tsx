@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { UserHabit } from '../types';
 import { STARTER_HABITS } from '../data/starterHabits';
 
@@ -36,6 +36,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const [timerRunning, setTimerRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const counterInputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -52,6 +53,9 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
       setElapsedSeconds(defaultQuantity * 60);
     } else {
       setElapsedSeconds(0);
+      requestAnimationFrame(() => {
+        counterInputRef.current?.focus();
+      });
     }
   }, [visible, defaultQuantity, inputMode]);
 
@@ -120,6 +124,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
         <Text style={styles.counterButtonText}>−</Text>
       </TouchableOpacity>
       <TextInput
+        ref={counterInputRef}
         value={String(quantity)}
         onChangeText={(text) => {
           const numeric = parseInt(text.replace(/[^0-9]/g, ''), 10);
@@ -131,6 +136,8 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
         }}
         keyboardType="number-pad"
         style={styles.counterInput}
+        autoFocus
+        selectTextOnFocus
       />
       <TouchableOpacity
         style={styles.counterButton}
@@ -182,43 +189,50 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
-      <View style={styles.backdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={handleClose} />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetEmoji}>{habit.emoji}</Text>
-            <Text style={styles.sheetTitle}>{habit.name}</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.sheetSubtitle}>
-            {inputMode === 'timer' || inputMode === 'duration_min'
-              ? 'Track your focused time and keep the streak alive.'
-              : inputMode === 'checkin' || inputMode === 'check'
-              ? 'Log once per day and keep the momentum going.'
-              : 'Tap + or enter the amount you completed.'}
-          </Text>
-
-          {renderControls()}
-
-          {inputMode !== 'timer' && inputMode !== 'duration_min' && (
-            <Text style={styles.quantityDescriptor}>
-              {quantity} {displayUnit}
-            </Text>
-          )}
-
-          <TouchableOpacity
-            style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
-            onPress={() => handleConfirm()}
-            disabled={isLogging}
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.backdrop}>
+          <KeyboardAvoidingView
+            style={styles.sheetWrapper}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
           >
-            <Text style={styles.confirmButtonText}>
-              {isLogging ? 'Saving…' : 'Log it'}
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.sheet}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetEmoji}>{habit.emoji}</Text>
+                <Text style={styles.sheetTitle}>{habit.name}</Text>
+                <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.sheetSubtitle}>
+                {inputMode === 'timer' || inputMode === 'duration_min'
+                  ? 'Track your focused time and keep the streak alive.'
+                  : inputMode === 'checkin' || inputMode === 'check'
+                  ? 'Log once per day and keep the momentum going.'
+                  : 'Tap + or enter the amount you completed.'}
+              </Text>
+
+              {renderControls()}
+
+              {inputMode !== 'timer' && inputMode !== 'duration_min' && (
+                <Text style={styles.quantityDescriptor}>
+                  {quantity} {displayUnit}
+                </Text>
+              )}
+
+              <TouchableOpacity
+                style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
+                onPress={() => handleConfirm()}
+                disabled={isLogging}
+              >
+                <Text style={styles.confirmButtonText}>
+                  {isLogging ? 'Saving…' : 'Log it'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 };
@@ -235,6 +249,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    padding: 20,
+  },
+  sheetWrapper: {
+    width: '100%',
   },
   sheet: {
     backgroundColor: 'white',

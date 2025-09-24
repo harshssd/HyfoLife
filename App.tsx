@@ -1627,10 +1627,11 @@ const styles = StyleSheet.create({
   },
   toastContainer: {
     position: 'absolute',
-    bottom: 40,
+    bottom: 120,
     left: 0,
     right: 0,
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   toastCard: {
     backgroundColor: 'rgba(45, 55, 72, 0.9)',
