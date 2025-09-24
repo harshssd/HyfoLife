@@ -55,10 +55,13 @@ export default function App() {
   const [entriesByHabit, setEntriesByHabit] = useState<Record<string, LogEntry[]>>({});
   const [todayEntries, setTodayEntries] = useState<LogEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<LogEntry[]>([]);
-  const [recentEntriesLimit, setRecentEntriesLimit] = useState<'today' | 'week' | 'month' | 'all'>('today');
+  const [recentEntriesLimit, setRecentEntriesLimit] = useState<'today' | 'week' | 'month' | 'quarter'>('today');
   const [isRecentActivityModalVisible, setIsRecentActivityModalVisible] = useState(false);
   const [selectedHabitFilter, setSelectedHabitFilter] = useState<string | null>(null);
   const [modalEntries, setModalEntries] = useState<LogEntry[]>([]);
+  const [modalPage, setModalPage] = useState(0);
+  const [hasMoreEntries, setHasMoreEntries] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [lastLoggedEntry, setLastLoggedEntry] = useState<LogEntry | null>(null);
   const [undoVisible, setUndoVisible] = useState(false);
   const [isQuickLogPickerVisible, setIsQuickLogPickerVisible] = useState(false);
@@ -74,7 +77,12 @@ export default function App() {
   useEffect(() => {
     if (!isRecentActivityModalVisible || !user?.id) return;
 
-    fetchModalEntries(user.id, recentEntriesLimit, selectedHabitFilter).catch(err => {
+    // Reset pagination when filters change
+    setModalPage(0);
+    setHasMoreEntries(true);
+    setModalEntries([]);
+    
+    fetchModalEntries(user.id, recentEntriesLimit, selectedHabitFilter, 0, true).catch(err => {
       console.error('Error fetching modal entries:', err);
     });
   }, [isRecentActivityModalVisible, recentEntriesLimit, selectedHabitFilter, user?.id]);
@@ -1119,30 +1127,35 @@ export default function App() {
 
   const fetchModalEntries = async (
     userId: string,
-    window: 'today' | 'week' | 'month' | 'all',
+    window: 'today' | 'week' | 'month' | 'quarter',
     habitId?: string | null,
+    page: number = 0,
+    reset: boolean = false,
   ) => {
+    const pageSize = 25;
+    const offset = page * pageSize;
+    
     const query = supabase
       .from('habit_entries')
       .select('*')
       .eq('user_id', userId)
       .order('logged_at', { ascending: false })
-      .limit(window === 'all' ? 200 : 100);
+      .range(offset, offset + pageSize - 1);
 
     if (habitId) {
       query.eq('habit_id', habitId);
     }
 
-    if (window !== 'all') {
-      const startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      if (window === 'week') {
-        startDate.setDate(startDate.getDate() - 6);
-      } else if (window === 'month') {
-        startDate.setDate(startDate.getDate() - 29);
-      }
-      query.gte('logged_at', startDate.toISOString());
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    if (window === 'week') {
+      startDate.setDate(startDate.getDate() - 6);
+    } else if (window === 'month') {
+      startDate.setDate(startDate.getDate() - 29);
+    } else if (window === 'quarter') {
+      startDate.setDate(startDate.getDate() - 89); // Last 90 days
     }
+    query.gte('logged_at', startDate.toISOString());
 
     const { data, error } = await query;
     if (error) throw error;
@@ -1152,7 +1165,15 @@ export default function App() {
       habit: userHabits.find(h => h.id === entry.habit_id),
     }));
 
-    setModalEntries(entries);
+    if (reset) {
+      setModalEntries(entries);
+    } else {
+      setModalEntries(prev => [...prev, ...entries]);
+    }
+
+    // Check if there are more entries
+    setHasMoreEntries(entries.length === pageSize);
+    setIsLoadingMore(false);
   };
 
   const getTodayProgress = (habitId: string) => {
@@ -1271,14 +1292,14 @@ const renderRecentActivityModal = () => {
 
           <ScrollView contentContainerStyle={styles.modalContent}>
             <View style={styles.filterRow}>
-              {(['today', 'week', 'month', 'all'] as const).map(window => (
+              {(['today', 'week', 'month', 'quarter'] as const).map(window => (
                 <TouchableOpacity
                   key={window}
                   style={[styles.filterChip, recentEntriesLimit === window && styles.filterChipActive]}
                   onPress={() => setRecentEntriesLimit(window)}
                 >
                   <Text style={[styles.filterChipText, recentEntriesLimit === window && styles.filterChipTextActive]}>
-                    {window === 'today' ? 'Today' : window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'All'}
+                    {window === 'today' ? 'Today' : window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'Last 90 days'}
                   </Text>
             </TouchableOpacity>
           ))}
@@ -1309,21 +1330,41 @@ const renderRecentActivityModal = () => {
                 <Text style={styles.emptyModalText}>No activity in this range.</Text>
               </View>
             ) : (
-              filteredEntries.map(entry => (
-                <View key={entry.id} style={styles.modalLogRow}>
-                  <View style={styles.modalLogInfo}>
-                    <Text style={styles.modalLogTitle}>{entry.habit?.emoji || '📝'} {entry.habit?.name || 'Habit'}</Text>
-                    <Text style={styles.modalLogSubtitle}>{formatEntrySummary(entry)}</Text>
+              <>
+                {filteredEntries.map(entry => (
+                  <View key={entry.id} style={styles.modalLogRow}>
+                    <View style={styles.modalLogInfo}>
+                      <Text style={styles.modalLogTitle}>{entry.habit?.emoji || '📝'} {entry.habit?.name || 'Habit'}</Text>
+                      <Text style={styles.modalLogSubtitle}>{formatEntrySummary(entry)}</Text>
+                    </View>
+                    <View style={styles.modalLogMeta}>
+                      <Text style={styles.modalLogDate}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
+                      <Text style={styles.modalLogTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.modalDeleteButton}>
+                        <Text style={styles.modalDeleteButtonText}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.modalLogMeta}>
-                    <Text style={styles.modalLogDate}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
-                    <Text style={styles.modalLogTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                    <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.modalDeleteButton}>
-                      <Text style={styles.modalDeleteButtonText}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+                ))}
+                
+                {hasMoreEntries && (
+                  <TouchableOpacity 
+                    style={styles.loadMoreButton}
+                    onPress={() => {
+                      if (isLoadingMore || !user?.id) return;
+                      setIsLoadingMore(true);
+                      const nextPage = modalPage + 1;
+                      setModalPage(nextPage);
+                      fetchModalEntries(user.id, recentEntriesLimit, selectedHabitFilter, nextPage, false);
+                    }}
+                    disabled={isLoadingMore}
+                  >
+                    <Text style={styles.loadMoreButtonText}>
+                      {isLoadingMore ? 'Loading...' : 'Load more entries'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
       </ScrollView>
     </SafeAreaView>
@@ -2242,7 +2283,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f7fafc',
   },
   modalHeader: {
-    padding: 20,
+    padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -2260,16 +2301,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalContent: {
-    padding: 20,
-    gap: 20,
+    padding: 16,
+    gap: 12,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   filterChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 999,
     backgroundColor: '#edf2f7',
   },
@@ -2288,10 +2329,10 @@ const styles = StyleSheet.create({
   },
   habitFilterChip: {
     backgroundColor: '#e2e8f0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 999,
-    marginRight: 10,
+    marginRight: 8,
   },
   habitFilterChipActive: {
     backgroundColor: '#48bb78',
@@ -2312,9 +2353,9 @@ const styles = StyleSheet.create({
   },
   modalLogRow: {
     backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -3038,5 +3079,20 @@ const styles = StyleSheet.create({
   quickTapChevron: {
     fontSize: 18,
     color: '#a0aec0',
+  },
+  loadMoreButton: {
+    backgroundColor: '#f7fafc',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  loadMoreButtonText: {
+    color: '#4299e1',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
