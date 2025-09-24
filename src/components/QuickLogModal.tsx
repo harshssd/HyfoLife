@@ -29,7 +29,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const defaultQuantity = starterMeta?.defaultQuantity || habit?.goalPerDay || 1;
   const increment = starterMeta?.quickIncrement || habit?.quickIncrement || 1;
   const unitLabel = habit?.unitLabel || starterMeta?.displayUnit || 'unit';
-  const timerPresets = starterMeta?.timerPresets || [15, 25, 45, 60];
+  const timerPresets = [15, 30, 45, 60];
   const displayUnit = quantity === 1 ? (habit?.unitLabel || unitLabel) : (habit?.unitPlural || starterMeta?.displayUnitPlural || `${unitLabel}s`);
 
   const [quantity, setQuantity] = useState(defaultQuantity);
@@ -50,7 +50,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
     setQuantity(defaultQuantity);
     if (inputMode === 'timer' || inputMode === 'duration_min') {
       setTimerRunning(false);
-      setElapsedSeconds(defaultQuantity * 60);
+      setElapsedSeconds(0);
     } else {
       setElapsedSeconds(0);
       requestAnimationFrame(() => {
