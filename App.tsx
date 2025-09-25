@@ -48,6 +48,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authUsername, setAuthUsername] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccess, setAuthSuccess] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [recentLogCache, setRecentLogCache] = useState<Record<string, string>>({});
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -264,6 +265,7 @@ export default function App() {
     setAuthPassword('');
     setAuthUsername('');
     setAuthError(null);
+    setAuthSuccess(null);
   };
 
   const handleSignUp = async () => {
@@ -299,8 +301,13 @@ export default function App() {
         loadUserHabits(data.session.user.id);
       } else if (data.user && !data.session) {
         // User created but needs email confirmation
-        setAuthError('Account created! Please check your email and click the confirmation link to complete signup.');
-        resetAuthForm();
+        setAuthSuccess('Account created! Please check your email and click the confirmation link to complete signup.');
+        setToastMessage('Account created! Please check your email and click the confirmation link to complete signup.');
+        // Don't reset form immediately, let user see the success message
+        setTimeout(() => {
+          resetAuthForm();
+          setAppState('login');
+        }, 3000); // Wait 3 seconds before switching to login
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
@@ -757,6 +764,7 @@ export default function App() {
         </View>
 
         {authError && <Text style={styles.errorText}>{authError}</Text>}
+        {authSuccess && <Text style={styles.successText}>{authSuccess}</Text>}
 
         <TouchableOpacity
           style={[styles.primaryButton, isLoading && styles.disabledButton]}
@@ -1898,6 +1906,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 16,
     textAlign: 'center',
+  },
+  successText: {
+    color: '#38a169',
+    fontSize: 14,
+    marginBottom: 16,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   cardEmoji: {
     fontSize: 32,
