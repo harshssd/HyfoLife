@@ -16,11 +16,11 @@ export default {
       policy: "appVersion" // ties OTA updates to appVersion; bump on native changes
     },
     updates: {
-      url: "https://u.expo.dev/hyfo-life"
+      url: "https://u.expo.dev/a495bb40-11be-40bc-ad8a-ea4be9d711ac"
     },
     extra: {
       eas: {
-        projectId: "hyfo-life"
+        projectId: "a495bb40-11be-40bc-ad8a-ea4be9d711ac"
       }
     },
     ios: {
