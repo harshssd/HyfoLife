@@ -15,11 +15,22 @@ export default {
     runtimeVersion: {
       policy: "appVersion" // ties OTA updates to appVersion; bump on native changes
     },
-    // updates and extra.eas will be set by eas init
+    updates: {
+      url: "https://u.expo.dev/hyfo-life"
+    },
+    extra: {
+      eas: {
+        projectId: "hyfo-life"
+      }
+    },
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.hyfolife.app",
-      buildNumber: "1"
+      buildNumber: "1",
+      infoPlist: {
+        NSMicrophoneUsageDescription: "This app needs access to microphone for voice recording and speech recognition.",
+        NSSpeechRecognitionUsageDescription: "This app uses speech recognition to convert your speech to text for logging habits."
+      }
     },
     android: {
       package: "com.hyfolife.app",
@@ -28,8 +39,10 @@ export default {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff"
       },
-      edgeToEdgeEnabled: true,
-      predictiveBackGestureEnabled: false
+      permissions: [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET"
+      ]
     },
     web: {
       favicon: "./assets/favicon.png"
