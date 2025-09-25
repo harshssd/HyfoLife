@@ -275,6 +275,8 @@ export default function App() {
     setIsLoading(true);
     setAuthError(null);
     try {
+      console.log('Attempting signup with:', { email: authEmail.trim(), username: authUsername.trim() });
+      
       const { data, error } = await supabase.auth.signUp({
         email: authEmail.trim(),
         password: authPassword,
@@ -285,13 +287,20 @@ export default function App() {
         },
       });
       
+      console.log('Signup response:', { data, error });
+      
       if (error) throw error;
       
       if (data.session?.user) {
+        // User is immediately signed in (email confirmation disabled)
         setUser(data.session.user);
         resetAuthForm();
         setAppState('habit-selection');
         loadUserHabits(data.session.user.id);
+      } else if (data.user && !data.session) {
+        // User created but needs email confirmation
+        setAuthError('Account created! Please check your email and click the confirmation link to complete signup.');
+        resetAuthForm();
       }
     } catch (error: any) {
       console.error('Sign up error:', error);
