@@ -29,7 +29,8 @@ export default {
       buildNumber: "1",
       infoPlist: {
         NSMicrophoneUsageDescription: "This app needs access to microphone for voice recording and speech recognition.",
-        NSSpeechRecognitionUsageDescription: "This app uses speech recognition to convert your speech to text for logging habits."
+        NSSpeechRecognitionUsageDescription: "This app uses speech recognition to convert your speech to text for logging habits.",
+        ITSAppUsesNonExemptEncryption: false
       }
     },
     android: {
