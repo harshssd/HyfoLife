@@ -545,6 +545,15 @@ export default function App() {
     setToastMessage(null);
   };
 
+  // Clear toast and auth messages when navigating away from auth screens
+  useEffect(() => {
+    if (appState !== 'signup' && appState !== 'login') {
+      clearToast();
+      setAuthSuccess(null);
+      setAuthError(null);
+    }
+  }, [appState]);
+
   const showQuickLogFeedback = (habit: UserHabit, quantity: number, entry?: LogEntry) => {
     let message: string;
 
