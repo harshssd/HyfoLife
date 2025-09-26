@@ -346,6 +346,8 @@ export default function App() {
       return;
     }
 
+    console.log('🔐 Attempting sign in with:', { email: authEmail.trim(), passwordLength: authPassword.length });
+    
     setIsLoading(true);
     setAuthError(null);
     try {
@@ -354,16 +356,19 @@ export default function App() {
         password: authPassword,
       });
 
+      console.log('🔐 Sign in response:', { data, error });
+
       if (error) throw error;
 
       if (data.user) {
+        console.log('🔐 Sign in successful:', data.user.id);
         setUser(data.user);
         resetAuthForm();
         setAppState('dashboard');
         loadUserHabits(data.user.id);
       }
     } catch (error: any) {
-      console.error('Sign in error:', error);
+      console.error('🔐 Sign in error:', error);
       setAuthError(error.message || 'Unable to sign in right now.');
     } finally {
       setIsLoading(false);
