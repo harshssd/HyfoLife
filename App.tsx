@@ -10,6 +10,7 @@ import { UserHabit, LogEntry, VisualTheme, HabitGoal, HeatmapDay } from './src/t
 type AppState = 'onboarding' | 'signup' | 'login' | 'habit-selection' | 'dashboard' | 'logging';
 import QuickLogModal from './src/components/QuickLogModal';
 import HeatmapTile from './src/components/HeatmapTile';
+import GoalSettingModal from './src/components/GoalSettingModal';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
@@ -1225,20 +1226,50 @@ export default function App() {
 
   const getTodayProgress = (habitId: string) => {
     const goal = habitGoals[habitId];
-    if (!goal || goal.period !== 'daily') return { value: 0, target: null, percent: 0, unit: goal?.target_unit };
+    if (!goal || goal.target_value <= 0) return { value: 0, target: null, percent: 0, unit: goal?.target_unit };
 
     const entries = entriesByHabit[habitId] || todayEntries.filter(entry => entry.habit_id === habitId);
-    const totalToday = entries.reduce((sum, entry) => {
-      const entryDate = new Date(entry.logged_at);
-      return isSameDay(entryDate, new Date()) ? sum + entry.value : sum;
-    }, 0);
+    const now = new Date();
+    
+    let totalValue = 0;
+    
+    if (goal.period === 'daily') {
+      // Calculate today's total
+      totalValue = entries.reduce((sum, entry) => {
+        const entryDate = new Date(entry.logged_at);
+        return isSameDay(entryDate, now) ? sum + entry.value : sum;
+      }, 0);
+    } else if (goal.period === 'weekly') {
+      // Calculate this week's total (Monday to Sunday)
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay() + 1); // Monday
+      startOfWeek.setHours(0, 0, 0, 0);
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+      endOfWeek.setHours(23, 59, 59, 999);
+      
+      totalValue = entries.reduce((sum, entry) => {
+        const entryDate = new Date(entry.logged_at);
+        return entryDate >= startOfWeek && entryDate <= endOfWeek ? sum + entry.value : sum;
+      }, 0);
+    } else if (goal.period === 'monthly') {
+      // Calculate this month's total
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      totalValue = entries.reduce((sum, entry) => {
+        const entryDate = new Date(entry.logged_at);
+        return entryDate >= startOfMonth && entryDate <= endOfMonth ? sum + entry.value : sum;
+      }, 0);
+    }
 
-    const percent = Math.round((totalToday / goal.target_value) * 100);
-    return { value: totalToday, target: goal.target_value, percent, unit: goal.target_unit };
+    const percent = Math.round((totalValue / goal.target_value) * 100);
+    return { value: totalValue, target: goal.target_value, percent, unit: goal.target_unit };
   };
 
   const todayGoalsSummary = useMemo(() => {
-    const goalHabits = userHabits.filter(habit => habitGoals[habit.id]?.period === 'daily');
+    const goalHabits = userHabits.filter(habit => habitGoals[habit.id] && habitGoals[habit.id]!.target_value > 0);
     const completed = goalHabits.filter(habit => {
       const { percent } = getTodayProgress(habit.id);
       return percent >= 100;
@@ -1258,7 +1289,7 @@ export default function App() {
     const goal = habitGoals[habit.id];
     const containerStyle = [styles.goalModule, size === 'compact' && styles.goalModuleCompact];
 
-    if (!goal || goal.period !== 'daily' || goal.target_value <= 0) {
+    if (!goal || goal.target_value <= 0) {
       return (
         <TouchableOpacity style={containerStyle} onPress={() => setGoalModalHabit(habit)}>
           <Text style={styles.goalModuleAction}>Set goal</Text>
@@ -1269,6 +1300,11 @@ export default function App() {
     const { percent, value, target, unit } = getTodayProgress(habit.id);
     const clampedPercent = Math.min(percent, 100);
     const isOverflow = percent >= 100;
+
+    // Get period label
+    const periodLabel = goal.period === 'daily' ? 'today' : 
+                       goal.period === 'weekly' ? 'this week' : 
+                       'this month';
 
     return (
       <View style={containerStyle}>
@@ -1291,9 +1327,14 @@ export default function App() {
           )}
         </View>
         <View style={styles.goalModuleFooter}>
-          <Text style={styles.goalModuleText}>
-            {value}{unit ? unit : ''} / {target}{unit ? unit : ''}
-          </Text>
+          <View style={styles.goalModuleText}>
+            <Text style={styles.goalModuleValue}>
+              {Math.round(value)}/{target} {unit}
+            </Text>
+            <Text style={styles.goalModulePeriod}>
+              {periodLabel}
+            </Text>
+          </View>
           <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
             <Text style={styles.goalModuleAction}>Edit</Text>
           </TouchableOpacity>
@@ -2993,9 +3034,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   goalModuleText: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  goalModuleValue: {
     fontSize: 12,
     color: '#4a5568',
     fontWeight: '600',
+  },
+  goalModulePeriod: {
+    fontSize: 10,
+    color: '#718096',
+    fontWeight: '500',
+    marginTop: 2,
   },
   goalModuleAction: {
     fontSize: 12,
