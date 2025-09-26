@@ -6,12 +6,14 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
 import { UserHabit, LogEntry, VisualTheme, HabitGoal, HeatmapDay } from './src/types';
+
+type AppState = 'onboarding' | 'signup' | 'login' | 'habit-selection' | 'dashboard' | 'logging';
 import QuickLogModal from './src/components/QuickLogModal';
 import HeatmapTile from './src/components/HeatmapTile';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
-  return habit.inputMode === 'check' || habit.inputMode === 'checkin';
+  return habit.inputMode === 'checkin';
 };
 
 const hasMetGoalForToday = (
@@ -20,6 +22,20 @@ const hasMetGoalForToday = (
   todayEntriesList: LogEntry[],
 ) => {
   if (!habit || !habit.goalPerDay || habit.goalPerDay <= 0) return false;
+  
+  // For checkin habits, if goal is 1, check if there's at least one entry today
+  if (isCheckinHabit(habit) && habit.goalPerDay === 1) {
+    const entries = entriesByHabitMap[habit.id] || todayEntriesList.filter(entry => entry.habit_id === habit.id);
+    return entries.some(entry => {
+      const entryDate = new Date(entry.logged_at);
+      return (
+        entryDate.getFullYear() === new Date().getFullYear() &&
+        entryDate.getMonth() === new Date().getMonth() &&
+        entryDate.getDate() === new Date().getDate()
+      );
+    });
+  }
+  
   const minimumMeaningfulGoal = habit.quickIncrement && habit.quickIncrement > 0 ? habit.quickIncrement : 1;
   if (habit.goalPerDay <= minimumMeaningfulGoal) return false;
 
@@ -153,9 +169,9 @@ export default function App() {
           name: habitName,
           emoji: habit.emoji || fallbackEmoji,
         alias: habit.alias,
-          streak: 0,
-          totalLogged: 0,
-          lastLogged: habit.last_logged_at || habit.created_at,
+          streak: 0, // Will be calculated by loadHabitEntries
+          totalLogged: 0, // Will be calculated by loadHabitEntries
+          lastLogged: habit.created_at,
         createdAt: habit.created_at,
           unit: habit.unit || starterHabit?.unit,
           unitLabel: habit.goal_unit_label || starterHabit?.displayUnit,
@@ -201,11 +217,13 @@ export default function App() {
 
   const loadHabitEntries = async (targetUserId: string, habits?: UserHabit[], goalMap?: Record<string, HabitGoal | null>) => {
     try {
-      const startOfDayUTC = new Date();
-      startOfDayUTC.setHours(0, 0, 0, 0);
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
 
-      const thirtyDaysAgo = new Date(startOfDayUTC);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setTime(endOfToday.getTime() - (29 * 24 * 60 * 60 * 1000));
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+
 
       const { data, error } = await supabase
         .from('habit_entries')
@@ -236,13 +254,17 @@ export default function App() {
       setEntriesByHabit(grouped);
 
       setRecentEntries(todayEntriesList.slice(0, 4));
-      setHeatmapData(buildHeatmap(grouped, habits || userHabits, goalMap || habitGoals, thirtyDaysAgo, startOfDayUTC));
+      setHeatmapData(buildHeatmap(grouped, habits || userHabits, goalMap || habitGoals, thirtyDaysAgo, endOfToday));
 
       if (habits) {
         const updatedHabits = habits.map(habit => {
           const habitEntriesForHabit = grouped[habit.id] || [];
           const totalLogged = habitEntriesForHabit.reduce((sum, entry) => sum + entry.value, 0);
-          const streak = calculateStreak(habitEntriesForHabit);
+          // Sort entries by date ascending (oldest first) for streak calculation
+          const sortedEntries = [...habitEntriesForHabit].sort((a, b) => 
+            new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+          );
+          const streak = calculateStreak(sortedEntries);
           const lastLogged = habitEntriesForHabit[0]?.logged_at || habit.lastLogged;
 
           return {
@@ -447,6 +469,8 @@ export default function App() {
 
     try {
       setIsLogging(true);
+      
+      // Insert the habit entry
       const { data, error } = await supabase
         .from('habit_entries')
         .insert({
@@ -975,7 +999,13 @@ export default function App() {
               {userHabits.map((habit) => {
                 const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
                 const now = new Date();
-                const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
+                // For checkin habits, check actual entries instead of lastLogged date
+                const alreadyLoggedToday = isCheckinHabit(habit) 
+                  ? Boolean(entriesByHabit[habit.id]?.some(entry => {
+                      const entryDate = new Date(entry.logged_at);
+                      return isSameDay(entryDate, now);
+                    }))
+                  : Boolean(lastLogged && isSameDay(lastLogged, now));
                 const alreadyComplete = isCheckinHabit(habit)
                   ? alreadyLoggedToday
                   : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
@@ -1008,21 +1038,21 @@ export default function App() {
                           <View style={styles.habitFlameStats}>
                             <Text style={styles.habitFlameText}>{habit.streak} day streak</Text>
                             <Text style={styles.habitFlameSubtext}>{habit.totalLogged} total</Text>
-                          </View>
                   </View>
                 </View>
+                </View>
+                {alreadyComplete && isCheckinHabit(habit) ? (
+                  <View style={styles.habitLogPillDisabled}>
+                    <Text style={styles.habitLogPillTextDisabled}>✓ Done</Text>
+                  </View>
+                ) : (
                 <TouchableOpacity
-                        style={styles.habitLogPill}
-                        onPress={() => {
-                          const alreadyComplete = isCheckinHabit(habit)
-                            ? Boolean(habit.lastLogged && isSameDay(new Date(habit.lastLogged), new Date()))
-                            : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
-                          if (alreadyComplete && isCheckinHabit(habit)) return;
-                          setActiveLogHabit(habit);
-                        }}
-                      >
-                        <Text style={styles.habitLogPillText}>Log</Text>
+                    style={styles.habitLogPill}
+                    onPress={() => setActiveLogHabit(habit)}
+                >
+                    <Text style={styles.habitLogPillText}>Log</Text>
                 </TouchableOpacity>
+                )}
               </View>
 
                     {renderGoalModule(habit)}
@@ -1666,15 +1696,15 @@ const renderRecentActivityModal = () => {
       const entries = grouped[habit.id] || [];
       const goal = goalMap[habit.id];
 
-      for (let offset = 0; offset <= 29; offset++) {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(startDate.getDate() + offset);
+      for (let offset = 0; offset <= 30; offset++) {
+        const currentDate = new Date(startDate.getTime() + (offset * 24 * 60 * 60 * 1000));
         const dateString = currentDate.toISOString().split('T')[0];
         const dailyEntries = entries.filter(entry => isSameDay(new Date(entry.logged_at), currentDate));
         const total = dailyEntries.reduce((sum, entry) => sum + entry.value, 0);
         const streak = calculateStreak(entries.filter(entry => new Date(entry.logged_at) <= currentDate), currentDate);
         const target = goal && goal.period === 'daily' ? goal.target_value : null;
         const percent = target ? Math.round((total / target) * 100) : 0;
+
 
         days.push({
           date: dateString,
@@ -2105,6 +2135,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     backgroundColor: '#f7fafc',
+  },
+  habitLogPillDisabled: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#c6f6d5',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#f0fff4',
+  },
+  habitLogPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2d3748',
+  },
+  habitLogPillTextDisabled: {
+    color: '#276749',
+    fontWeight: '600',
   },
   habitInfo: {
     flexDirection: 'row',

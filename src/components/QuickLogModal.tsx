@@ -100,6 +100,9 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
       await onConfirm(minutes, { durationMinutes: minutes });
       setTimerRunning(false);
       setElapsedSeconds(0);
+    } else if (inputMode === 'checkin' || inputMode === 'check') {
+      // For checkin habits, always log with value 1
+      await onConfirm(1);
     } else {
       await onConfirm(resolvedQuantity);
       setQuantity(defaultQuantity);
@@ -214,7 +217,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
 
               {renderControls()}
 
-              {inputMode !== 'timer' && inputMode !== 'duration_min' && (
+              {inputMode !== 'timer' && inputMode !== 'duration_min' && inputMode !== 'checkin' && inputMode !== 'check' && (
                 <Text style={styles.quantityDescriptor}>
                   {quantity} {displayUnit}
                 </Text>
