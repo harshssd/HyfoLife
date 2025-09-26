@@ -61,6 +61,18 @@ export const STARTER_HABITS: StarterHabit[] = [
     inputMode: 'checkin',
     streakAnimation: 'flame',
   },
+  {
+    id: 'reading',
+    name: 'Reading',
+    emoji: '📚',
+    defaultQuantity: 10,
+    unit: 'pages',
+    displayUnit: 'page',
+    displayUnitPlural: 'pages',
+    inputMode: 'counter',
+    quickIncrement: 5,
+    streakAnimation: 'book',
+  },
 ];
 
 // Natural language parsing patterns
