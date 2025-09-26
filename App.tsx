@@ -300,8 +300,6 @@ export default function App() {
     setIsLoading(true);
     setAuthError(null);
     try {
-      console.log('Attempting signup with:', { email: authEmail.trim(), username: authUsername.trim() });
-      
       const { data, error } = await supabase.auth.signUp({
         email: authEmail.trim(),
         password: authPassword,
@@ -311,8 +309,6 @@ export default function App() {
           },
         },
       });
-      
-      console.log('Signup response:', { data, error });
       
       if (error) throw error;
       
@@ -333,8 +329,28 @@ export default function App() {
         }, 3000); // Wait 3 seconds before switching to login
       }
     } catch (error: any) {
-      console.error('Sign up error:', error);
-      setAuthError(error.message || 'Unable to sign up right now.');
+      // Convert technical errors to user-friendly messages
+      let userMessage = 'Unable to create account right now. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('User already registered')) {
+          userMessage = 'An account with this email already exists. Please sign in instead.';
+        } else if (error.message.includes('Invalid email')) {
+          userMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Password should be at least')) {
+          userMessage = 'Password must be at least 6 characters long.';
+        } else if (error.message.includes('Password is too weak')) {
+          userMessage = 'Password is too weak. Please use a stronger password with letters and numbers.';
+        } else if (error.message.includes('Username already taken')) {
+          userMessage = 'This username is already taken. Please choose a different one.';
+        } else if (error.message.includes('Network')) {
+          userMessage = 'Network error. Please check your internet connection and try again.';
+        } else if (error.message.includes('Email rate limit')) {
+          userMessage = 'Too many sign-up attempts. Please wait a moment and try again.';
+        }
+      }
+      
+      setAuthError(userMessage);
     } finally {
       setIsLoading(false);
     }
@@ -346,8 +362,6 @@ export default function App() {
       return;
     }
 
-    console.log('🔐 Attempting sign in with:', { email: authEmail.trim(), passwordLength: authPassword.length });
-    
     setIsLoading(true);
     setAuthError(null);
     try {
@@ -356,20 +370,37 @@ export default function App() {
         password: authPassword,
       });
 
-      console.log('🔐 Sign in response:', { data, error });
-
       if (error) throw error;
 
       if (data.user) {
-        console.log('🔐 Sign in successful:', data.user.id);
         setUser(data.user);
         resetAuthForm();
         setAppState('dashboard');
         loadUserHabits(data.user.id);
       }
     } catch (error: any) {
-      console.error('🔐 Sign in error:', error);
-      setAuthError(error.message || 'Unable to sign in right now.');
+      // Convert technical errors to user-friendly messages
+      let userMessage = 'Unable to sign in right now. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('Invalid login credentials')) {
+          userMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else if (error.message.includes('Email not confirmed')) {
+          userMessage = 'Please check your email and click the confirmation link before signing in.';
+        } else if (error.message.includes('Too many requests')) {
+          userMessage = 'Too many sign-in attempts. Please wait a moment and try again.';
+        } else if (error.message.includes('Invalid email')) {
+          userMessage = 'Please enter a valid email address.';
+        } else if (error.message.includes('Password should be at least')) {
+          userMessage = 'Password is too short. Please use a stronger password.';
+        } else if (error.message.includes('User not found')) {
+          userMessage = 'No account found with this email. Please sign up first.';
+        } else if (error.message.includes('Network')) {
+          userMessage = 'Network error. Please check your internet connection and try again.';
+        }
+      }
+      
+      setAuthError(userMessage);
     } finally {
       setIsLoading(false);
     }
