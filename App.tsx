@@ -6,11 +6,13 @@ import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
 import { STARTER_HABITS } from './src/data/starterHabits';
 import { UserHabit, LogEntry, VisualTheme, HabitGoal, HeatmapDay } from './src/types';
+import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 
 type AppState = 'onboarding' | 'signup' | 'login' | 'habit-selection' | 'dashboard' | 'logging';
 import QuickLogModal from './src/components/QuickLogModal';
 import HeatmapTile from './src/components/HeatmapTile';
 import GoalSettingModal from './src/components/GoalSettingModal';
+import SettingsThemes from './src/screens/SettingsThemes';
 
 const isCheckinHabit = (habit?: UserHabit | null) => {
   if (!habit) return false;
@@ -53,6 +55,15 @@ const hasMetGoalForToday = (
 };
 
 export default function App() {
+  return (
+    <ThemeProvider initial="dark-oled">
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
+  const { theme } = useTheme();
   const [appState, setAppState] = useState<AppState>('onboarding');
   const [user, setUser] = useState<any>(null);
   const [userHabits, setUserHabits] = useState<UserHabit[]>([]);
@@ -86,6 +97,7 @@ export default function App() {
   const [habitGoals, setHabitGoals] = useState<Record<string, HabitGoal | null>>({});
   const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
   const [heatmapData, setHeatmapData] = useState<Record<string, HeatmapDay[]>>({});
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
   const flameAnimRefs = useRef<Record<string, Animated.Value>>({});
 
   useEffect(() => {
@@ -919,103 +931,119 @@ export default function App() {
   };
 
   const renderDashboard = () => (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.dashboardHero}>
+        <View style={[styles.dashboardHero, { 
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+          borderWidth: 1
+        }]}>
           <View style={styles.heroTopRow}>
             <View style={styles.dashboardHeroLeft}>
-              <Text style={styles.heroGreeting}>Hey {user?.user_metadata?.username || 'Hyfo human'} 👋</Text>
-              <Text style={styles.heroHeadline}>Stay hyperfocused today.</Text>
+              <Text style={[styles.heroGreeting, { color: theme.colors.textMuted }]}>Welcome back</Text>
+              <Text style={[styles.heroHeadline, { color: theme.colors.text }]}>Hyperfocused</Text>
             </View>
-            <TouchableOpacity style={styles.heroSignOut} onPress={handleSignOut}>
-              <Text style={styles.heroSignOutText}>Sign out</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={[styles.heroSignOut, { 
+                backgroundColor: theme.colors.surface2,
+                borderColor: theme.colors.border,
+                borderWidth: 1
+              }]} onPress={() => setShowThemeSettings(true)}>
+                <Text style={[styles.heroSignOutText, { color: theme.colors.textMuted }]}>🎨</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.heroSignOut, { 
+                backgroundColor: theme.colors.surface2,
+                borderColor: theme.colors.border,
+                borderWidth: 1
+              }]} onPress={handleSignOut}>
+                <Text style={[styles.heroSignOutText, { color: theme.colors.textMuted }]}>Sign out</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <View style={styles.heroMetricsRow}>
-            <View style={styles.heroMetricGroup}>
-              <View style={styles.heroMetric}>
-                <Text style={styles.heroMetricValue}>{longestStreak}</Text>
-                <Text style={styles.heroMetricLabel}>Longest streak</Text>
-              </View>
-              <View style={styles.heroMetric}>
-                <Text style={styles.heroMetricValue}>{totalLogs}</Text>
-                <Text style={styles.heroMetricLabel}>Entries logged</Text>
-              </View>
-              <View style={styles.heroMetric}>
-                <Text style={styles.heroMetricValue}>{totalHabits}</Text>
-                <Text style={styles.heroMetricLabel}>Active habits</Text>
-              </View>
+          {/* Streak & Goal summary bar */}
+          <View style={{ marginTop: theme.spacing(4), flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ 
+              flexDirection: "row", 
+              alignItems: "center", 
+              backgroundColor: theme.colors.surface2, 
+              borderRadius: 999, 
+              paddingVertical: 6, 
+              paddingHorizontal: 12, 
+              borderWidth: 1, 
+              borderColor: theme.colors.border 
+            }}>
+              <Text style={{ color: theme.colors.text }}>🔥</Text>
+              <Text style={{ color: theme.colors.text, marginLeft: 6 }}>{longestStreak}-day streak</Text>
             </View>
-            <View style={styles.heroDonutWrapper}>
-              {renderDashboardDonut()}
-              <Text
-                style={[styles.heroDonutCaption,
-                  todayGoalsSummary.total <= 0
-                    ? styles.heroDonutCaptionNeutral
-                    : todayGoalsSummary.completed >= todayGoalsSummary.total
-                      ? styles.heroDonutCaptionComplete
-                      : styles.heroDonutCaptionPending,
-                ]}
-              >
+            <View style={{ 
+              flexDirection: "row", 
+              alignItems: "center", 
+              backgroundColor: theme.colors.surface2, 
+              borderRadius: 999, 
+              paddingVertical: 6, 
+              paddingHorizontal: 12, 
+              borderWidth: 1, 
+              borderColor: theme.colors.border 
+            }}>
+              <Text style={{ color: theme.colors.text }}>🎯</Text>
+              <Text style={{ color: theme.colors.text, marginLeft: 6 }}>
                 {todayGoalsSummary.total > 0
-                  ? `${todayGoalsSummary.completed}/${todayGoalsSummary.total} daily`
+                  ? `${todayGoalsSummary.completed}/${todayGoalsSummary.total} today`
                   : 'No goals set'}
               </Text>
             </View>
           </View>
 
           <View style={styles.heroActionRow}>
-            <TouchableOpacity style={styles.heroCTA} onPress={() => setAppState('habit-selection')}>
-              <Text style={styles.heroCTAText}>+ Add habit</Text>
+            <TouchableOpacity style={[styles.heroCTA, { backgroundColor: theme.colors.accent }]} onPress={() => setAppState('habit-selection')}>
+              <Text style={[styles.heroCTAText, { color: theme.colors.bg }]}>+ Add habit</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.heroSecondaryCTA}
+              style={[styles.heroSecondaryCTA, { 
+                backgroundColor: theme.colors.surface2,
+                borderColor: theme.colors.border,
+                borderWidth: 1
+              }]}
               onPress={() => {
                 setRecentEntriesLimit('today');
                 setSelectedHabitFilter(null);
                 setIsRecentActivityModalVisible(true);
               }}
             >
-              <Text style={styles.heroSecondaryText}>Recent activity →</Text>
+              <Text style={[styles.heroSecondaryText, { color: theme.colors.text }]}>Recent activity →</Text>
             </TouchableOpacity>
           </View>
         </View>
         
         {userHabits.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🌱</Text>
-            <Text style={styles.emptyTitle}>No habits yet</Text>
-            <Text style={styles.emptyText}>Create your first habit to get started</Text>
+            <Text style={[styles.emptyEmoji, { color: theme.colors.text }]}>🌱</Text>
+            <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>No habits yet</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>Create your first habit to get started</Text>
             <TouchableOpacity 
-              style={styles.primaryButton}
+              style={[styles.primaryButton, { backgroundColor: theme.colors.accent }]}
               onPress={() => setAppState('habit-selection')}
             >
-              <Text style={styles.buttonText}>Create Habits</Text>
+              <Text style={[styles.buttonText, { color: theme.colors.bg }]}>Create Habits</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
           <View style={styles.habitsList}>
               {userHabits.map((habit) => {
-                const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
-                const now = new Date();
-                // For checkin habits, check actual entries instead of lastLogged date
-                const alreadyLoggedToday = isCheckinHabit(habit) 
-                  ? Boolean(entriesByHabit[habit.id]?.some(entry => {
-                      const entryDate = new Date(entry.logged_at);
-                      return isSameDay(entryDate, now);
-                    }))
-                  : Boolean(lastLogged && isSameDay(lastLogged, now));
-                const alreadyComplete = isCheckinHabit(habit)
-                  ? alreadyLoggedToday
-                  : hasMetGoalForToday(habit, entriesByHabit, todayEntries);
-
+                const { percent } = getTodayProgress(habit.id);
+                const goalPct = percent / 100;
+                
                 return (
-              <View key={habit.id} style={styles.habitRow}>
+                  <View key={habit.id} style={[styles.habitRow, { 
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    borderWidth: 1
+                  }]}>
                     <View style={styles.habitRowHeader}>
                       <View style={styles.habitTitleGroup}>
-                    <Text style={styles.habitName}>{habit.name}</Text>
+                        <Text style={[styles.habitName, { color: theme.colors.text }]}>{habit.name}</Text>
                         <View style={styles.habitFlameRow}>
                           <Animated.Text
                             style={[
@@ -1037,59 +1065,61 @@ export default function App() {
                             🔥
                           </Animated.Text>
                           <View style={styles.habitFlameStats}>
-                            <Text style={styles.habitFlameText}>{habit.streak} day streak</Text>
-                            <Text style={styles.habitFlameSubtext}>{habit.totalLogged} total</Text>
-                  </View>
-                </View>
-                </View>
-                {alreadyComplete && isCheckinHabit(habit) ? (
-                  <View style={styles.habitLogPillDisabled}>
-                    <Text style={styles.habitLogPillTextDisabled}>✓ Done</Text>
-                  </View>
-                ) : (
-                <TouchableOpacity
-                    style={styles.habitLogPill}
-                    onPress={() => setActiveLogHabit(habit)}
-                >
-                    <Text style={styles.habitLogPillText}>Log</Text>
-                </TouchableOpacity>
-                )}
-              </View>
+                            <Text style={[styles.habitFlameText, { color: theme.colors.text }]}>{habit.streak} day streak</Text>
+                            <Text style={[styles.habitFlameSubtext, { color: theme.colors.textMuted }]}>{habit.totalLogged} total</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.habitLogPill, { 
+                          backgroundColor: theme.colors.accent,
+                          borderColor: theme.colors.accent,
+                          borderWidth: 1
+                        }]}
+                        onPress={() => setActiveLogHabit(habit)}
+                      >
+                        <Text style={[styles.habitLogPillText, { color: theme.colors.bg }]}>Log</Text>
+                      </TouchableOpacity>
+                    </View>
 
                     {renderGoalModule(habit)}
                     <View style={styles.heatmapWrap}>
                       {renderHeatmapTiles(habit.id)}
-          </View>
+                    </View>
                   </View>
                 );
               })}
             </View>
 
-            <View style={styles.recentLogsSection}>
+            <View style={[styles.recentLogsSection, { 
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+              borderWidth: 1
+            }]}>
               <View style={styles.recentLogsHeader}>
-                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Activity</Text>
                 <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(true)}>
-                  <Text style={styles.viewAllText}>See all</Text>
-        </TouchableOpacity>
+                  <Text style={[styles.viewAllText, { color: theme.colors.accent }]}>See all</Text>
+                </TouchableOpacity>
               </View>
               {recentEntries.length > 0 ? (
                 recentEntries.map(entry => (
-                  <View key={entry.id} style={styles.logRow}>
+                  <View key={entry.id} style={[styles.logRow, { borderBottomColor: theme.colors.border }]}>
                     <Text style={styles.logRowEmoji}>{entry.habit?.emoji || '📝'}</Text>
                     <View style={styles.logRowInfo}>
-                      <Text style={styles.logRowTitle}>{entry.habit?.name || 'Habit'}</Text>
-                      <Text style={styles.logRowSubtitle}>{formatEntrySummary(entry)}</Text>
+                      <Text style={[styles.logRowTitle, { color: theme.colors.text }]}>{entry.habit?.name || 'Habit'}</Text>
+                      <Text style={[styles.logRowSubtitle, { color: theme.colors.textMuted }]}>{formatEntrySummary(entry)}</Text>
                     </View>
                     <View style={styles.logRowActions}>
-                      <Text style={styles.logRowTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
-                      <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.deleteButton}>
-                        <Text style={styles.deleteButtonText}>Delete</Text>
+                      <Text style={[styles.logRowTime, { color: theme.colors.textMuted }]}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={[styles.deleteButton, { backgroundColor: theme.colors.surface2 }]}>
+                        <Text style={[styles.deleteButtonText, { color: theme.colors.textMuted }]}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
                 ))
               ) : (
-                <Text style={styles.recentEmptyText}>No activity logged today.</Text>
+                <Text style={[styles.recentEmptyText, { color: theme.colors.textMuted }]}>No activity logged today.</Text>
               )}
             </View>
           </>
@@ -1863,6 +1893,19 @@ const renderRecentActivityModal = () => {
           }
         }}
       />
+      {showThemeSettings && (
+        <Modal visible={showThemeSettings} animationType="slide" onRequestClose={() => setShowThemeSettings(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+              <Text style={{ color: theme.colors.text, fontSize: 20, fontWeight: '700' }}>Theme Settings</Text>
+              <TouchableOpacity onPress={() => setShowThemeSettings(false)} style={{ padding: 8, borderRadius: 12, backgroundColor: theme.colors.surface2 }}>
+                <Text style={{ color: theme.colors.textMuted }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <SettingsThemes />
+          </SafeAreaView>
+        </Modal>
+      )}
     </>
   );
 }
