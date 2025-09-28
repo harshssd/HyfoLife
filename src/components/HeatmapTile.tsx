@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { HeatmapDay } from '../types';
+import { useTheme } from '../theme/ThemeProvider';
 
 interface HeatmapTileProps {
   day: HeatmapDay;
@@ -17,35 +18,64 @@ const streakColorBands = [
 ];
 
 const HeatmapTile: React.FC<HeatmapTileProps> = ({ day, size = 24, onPress }) => {
-  const baseColor = getStreakColor(day.streak);
+  const { theme } = useTheme();
+  const [glow, setGlow] = useState(false);
+
+  const intensityIndex = useMemo(() => {
+    if (day.streak >= 14) return 4;
+    if (day.streak >= 7) return 3;
+    if (day.streak >= 4) return 2;
+    if (day.streak >= 1) return 1;
+    return 0;
+  }, [day.streak]);
+
+  const colorMap = [theme.colors.heat0, theme.colors.heat1, theme.colors.heat2, theme.colors.heat3, theme.colors.heat4];
+  const baseColor = colorMap[intensityIndex];
   const clampedPercent = Math.min(day.goalPercent, 100);
   const isComplete = day.goalPercent >= 100;
 
   const content = (
-    <View style={[styles.tile, { width: size, height: size, backgroundColor: baseColor }]}>
+    <View
+      style={[
+        styles.tile,
+        {
+          width: size,
+          height: size,
+          backgroundColor: baseColor,
+          borderColor: glow ? theme.colors.accent : theme.colors.border,
+          shadowColor: glow ? theme.colors.accent : 'transparent',
+        },
+      ]}
+    >
       {clampedPercent > 0 && (
         <View
-          style={[
-            styles.progressRing,
-            {
-              borderColor: isComplete ? '#f6ad55' : '#2f855a',
-              borderWidth: isComplete ? 3 : 2,
-            },
-          ]}
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            width: 0,
+            height: 0,
+            borderLeftWidth: size * 0.45,
+            borderTopWidth: size * 0.45,
+            borderLeftColor: 'transparent',
+            borderTopColor: isComplete ? theme.colors.success : theme.colors.accent,
+            opacity: Math.max(0.3, clampedPercent / 100),
+          }}
         />
       )}
-      {isComplete && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>⭐</Text>
-        </View>
-      )}
-      <Text style={styles.dayText}>{new Date(day.date).getDate()}</Text>
+      <Text style={[styles.dayText, { color: theme.colors.textMuted }]}>{new Date(day.date).getDate()}</Text>
     </View>
   );
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={() => onPress(day)} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={() => onPress(day)}
+        onLongPress={() => setGlow(true)}
+        delayLongPress={160}
+        onPressOut={() => setGlow(false)}
+        activeOpacity={0.85}
+      >
         {content}
       </TouchableOpacity>
     );

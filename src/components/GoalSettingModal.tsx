@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Alert } from 'react-native';
+import { useTheme } from '../theme/ThemeProvider';
 import { HabitGoal, UserHabit } from '../types';
 
 interface GoalSettingModalProps {
@@ -17,6 +18,7 @@ const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const { theme } = useTheme();
   const [targetValue, setTargetValue] = useState('1');
   const [targetUnit, setTargetUnit] = useState('');
   const [period, setPeriod] = useState<HabitGoal['period']>('daily');
@@ -87,14 +89,14 @@ const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }] }>
           <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={[styles.cancelButtonText, { color: theme.colors.textMuted }]}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Set Goal</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Set Goal</Text>
           <TouchableOpacity onPress={handleSave} style={styles.saveButton} disabled={isSaving}>
-            <Text style={[styles.saveButtonText, isSaving && styles.saveButtonTextDisabled]}>
+            <Text style={[styles.saveButtonText, isSaving && styles.saveButtonTextDisabled, { color: theme.colors.accent }]}>
               {isSaving ? 'Saving...' : 'Save'}
             </Text>
           </TouchableOpacity>
@@ -103,19 +105,19 @@ const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
         <View style={styles.content}>
           <View style={styles.habitInfo}>
             <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-            <Text style={styles.habitName}>{habit.name}</Text>
+            <Text style={[styles.habitName, { color: theme.colors.text }]}>{habit.name}</Text>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Goal Period</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Goal Period</Text>
             <View style={styles.periodButtons}>
               {(['daily', 'weekly', 'monthly'] as const).map((p) => (
                 <TouchableOpacity
                   key={p}
-                  style={[styles.periodButton, period === p && styles.periodButtonActive]}
+                  style={[styles.periodButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }, period === p && { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent }]}
                   onPress={() => setPeriod(p)}
                 >
-                  <Text style={[styles.periodButtonText, period === p && styles.periodButtonTextActive]}>
+                  <Text style={[styles.periodButtonText, { color: theme.colors.text }, period === p && { color: '#000' }]}>
                     {p.charAt(0).toUpperCase() + p.slice(1)}
                   </Text>
                 </TouchableOpacity>
@@ -124,30 +126,32 @@ const GoalSettingModal: React.FC<GoalSettingModalProps> = ({
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Target Value</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Target Value</Text>
             <TextInput
-              style={styles.valueInput}
+              style={[styles.valueInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, color: theme.colors.text }]}
               value={targetValue}
               onChangeText={setTargetValue}
               keyboardType="numeric"
               placeholder="Enter target value"
+              placeholderTextColor={theme.colors.textMuted}
             />
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Unit</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Unit</Text>
             <TextInput
-              style={styles.unitInput}
+              style={[styles.unitInput, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, color: theme.colors.text }]}
               value={targetUnit}
               onChangeText={setTargetUnit}
               placeholder="Enter unit (max 5 chars)"
+              placeholderTextColor={theme.colors.textMuted}
               maxLength={5}
             />
           </View>
 
           {goal && (
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-              <Text style={styles.deleteButtonText}>Delete Goal</Text>
+            <TouchableOpacity style={[styles.deleteButton, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]} onPress={handleDelete}>
+              <Text style={[styles.deleteButtonText, { color: theme.colors.warn }]}>Delete Goal</Text>
             </TouchableOpacity>
           )}
         </View>
