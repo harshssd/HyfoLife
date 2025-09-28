@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { UserHabit } from '../types';
 import { STARTER_HABITS } from '../data/starterHabits';
+import { useTheme } from '../theme/ThemeProvider';
 
 type QuickLogModalProps = {
   visible: boolean;
@@ -20,6 +21,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   onConfirm,
   isLogging,
 }) => {
+  const { theme } = useTheme();
   const starterMeta = useMemo(() => {
     if (!habit) return null;
     return STARTER_HABITS.find((starter) => starter.name.toLowerCase() === habit.name.toLowerCase());
@@ -193,21 +195,21 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.backdrop}>
+        <View style={[styles.backdrop, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
           <KeyboardAvoidingView
             style={styles.sheetWrapper}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
           >
-            <View style={styles.sheet}>
+            <View style={[styles.sheet, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetEmoji}>{habit.emoji}</Text>
-                <Text style={styles.sheetTitle}>{habit.name}</Text>
+                <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{habit.name}</Text>
                 <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>✕</Text>
+                  <Text style={[styles.closeButtonText, { color: theme.colors.textMuted }]}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.sheetSubtitle}>
+              <Text style={[styles.sheetSubtitle, { color: theme.colors.textMuted }]}>
                 {inputMode === 'timer' || inputMode === 'duration_min'
                   ? 'Track your focused time and keep the streak alive.'
                   : inputMode === 'checkin' || inputMode === 'check'
@@ -218,13 +220,13 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
               {renderControls()}
 
               {inputMode !== 'timer' && inputMode !== 'duration_min' && inputMode !== 'checkin' && inputMode !== 'check' && (
-                <Text style={styles.quantityDescriptor}>
+                <Text style={[styles.quantityDescriptor, { color: theme.colors.text }] }>
                   {quantity} {displayUnit}
                 </Text>
               )}
 
               <TouchableOpacity
-                style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.accent }, isLogging && styles.confirmButtonDisabled]}
                 onPress={() => handleConfirm()}
                 disabled={isLogging}
               >
@@ -270,6 +272,7 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
     elevation: 12,
+    borderWidth: 1,
   },
   sheetHeader: {
     flexDirection: 'row',
