@@ -8,7 +8,7 @@ export interface StarterHabit {
   unit: string;
   displayUnit: string;
   displayUnitPlural?: string;
-  inputMode?: 'counter' | 'timer' | 'checkin' | 'quantity';
+  inputMode?: 'counter' | 'timer' | 'checkin' | 'quantity' | 'duration_min' | 'check';
   quickIncrement?: number;
   timerPresets?: number[];
   streakAnimation?: string;
@@ -26,7 +26,7 @@ export interface UserHabit {
   unit?: string;
   unitLabel?: string;
   unitPlural?: string;
-  inputMode?: 'counter' | 'timer' | 'checkin' | 'quantity';
+  inputMode?: 'counter' | 'timer' | 'checkin' | 'quantity' | 'duration_min' | 'check';
   goalPerDay?: number;
   quickIncrement?: number;
   timerPresets?: number[];

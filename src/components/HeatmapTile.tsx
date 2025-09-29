@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { HeatmapDay } from '../types';
+import { useTheme } from '../theme/ThemeProvider';
 
 interface HeatmapTileProps {
   day: HeatmapDay;
@@ -8,38 +9,40 @@ interface HeatmapTileProps {
   onPress?: (day: HeatmapDay) => void;
 }
 
-const streakColorBands = [
-  { threshold: 0, color: '#e2e8f0' },
-  { threshold: 1, color: '#c6f6d5' },
-  { threshold: 4, color: '#68d391' },
-  { threshold: 7, color: '#f6ad55' },
-  { threshold: 14, color: '#e53e3e' },
-];
+const streakBands = [0, 1, 4, 7, 14];
 
 const HeatmapTile: React.FC<HeatmapTileProps> = ({ day, size = 24, onPress }) => {
-  const baseColor = getStreakColor(day.streak);
+  const { theme } = useTheme();
+  const intensity = getIntensityFromStreak(day.streak);
+  const colorMap = [theme.colors.heat0, theme.colors.heat1, theme.colors.heat2, theme.colors.heat3, theme.colors.heat4];
+  const baseColor = colorMap[intensity];
   const clampedPercent = Math.min(day.goalPercent, 100);
   const isComplete = day.goalPercent >= 100;
 
   const content = (
-    <View style={[styles.tile, { width: size, height: size, backgroundColor: baseColor }]}>
+    <View style={[styles.tile, { width: size, height: size, backgroundColor: baseColor, borderColor: theme.colors.border }]}> 
       {clampedPercent > 0 && (
         <View
-          style={[
-            styles.progressRing,
-            {
-              borderColor: isComplete ? '#f6ad55' : '#2f855a',
-              borderWidth: isComplete ? 3 : 2,
-            },
-          ]}
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 0,
+            width: 0,
+            height: 0,
+            borderLeftWidth: size * 0.5,
+            borderTopWidth: size * 0.5,
+            borderLeftColor: 'transparent',
+            borderTopColor: isComplete ? theme.colors.success : theme.colors.accent,
+            opacity: Math.max(0.35, clampedPercent / 100),
+          }}
         />
       )}
       {isComplete && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>⭐</Text>
+        <View style={[styles.badge, { backgroundColor: theme.colors.surface }]}> 
+          <Text style={[styles.badgeText]}>⭐</Text>
         </View>
       )}
-      <Text style={styles.dayText}>{new Date(day.date).getDate()}</Text>
+      <Text style={[styles.dayText, { color: theme.colors.text }]}>{new Date(day.date).getDate()}</Text>
     </View>
   );
 
@@ -54,16 +57,13 @@ const HeatmapTile: React.FC<HeatmapTileProps> = ({ day, size = 24, onPress }) =>
   return content;
 };
 
-function getStreakColor(streak: number) {
-  let color = streakColorBands[0].color;
-  for (const band of streakColorBands) {
-    if (streak >= band.threshold) {
-      color = band.color;
-    } else {
-      break;
-    }
+function getIntensityFromStreak(streak: number) {
+  let idx = 0;
+  for (let i = 0; i < streakBands.length; i++) {
+    if (streak >= streakBands[i]) idx = i;
+    else break;
   }
-  return color;
+  return Math.max(0, Math.min(idx, 4));
 }
 
 const styles = StyleSheet.create({
@@ -73,14 +73,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-  },
-  progressRing: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    bottom: 2,
-    left: 2,
-    borderRadius: 6,
+    borderWidth: 1,
   },
   badge: {
     position: 'absolute',
@@ -100,4 +93,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default HeatmapTile;
+export default memo(HeatmapTile);

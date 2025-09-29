@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { useTheme } from '../theme/ThemeProvider';
 import { UserHabit } from '../types';
 import { STARTER_HABITS } from '../data/starterHabits';
 
@@ -20,6 +21,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   onConfirm,
   isLogging,
 }) => {
+  const { theme } = useTheme();
   const starterMeta = useMemo(() => {
     if (!habit) return null;
     return STARTER_HABITS.find((starter) => starter.name.toLowerCase() === habit.name.toLowerCase());
@@ -30,9 +32,9 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const increment = starterMeta?.quickIncrement || habit?.quickIncrement || 1;
   const unitLabel = habit?.unitLabel || starterMeta?.displayUnit || 'unit';
   const timerPresets = [15, 30, 45, 60];
-  const displayUnit = quantity === 1 ? (habit?.unitLabel || unitLabel) : (habit?.unitPlural || starterMeta?.displayUnitPlural || `${unitLabel}s`);
 
   const [quantity, setQuantity] = useState(defaultQuantity);
+  const displayUnit = quantity === 1 ? (habit?.unitLabel || unitLabel) : (habit?.unitPlural || starterMeta?.displayUnitPlural || `${unitLabel}s`);
   const [timerRunning, setTimerRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -193,21 +195,21 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={handleClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.backdrop}>
+        <View style={[styles.backdrop]}> 
           <KeyboardAvoidingView
             style={styles.sheetWrapper}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
           >
-            <View style={styles.sheet}>
+            <View style={[styles.sheet, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}> 
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetEmoji}>{habit.emoji}</Text>
-                <Text style={styles.sheetTitle}>{habit.name}</Text>
+                <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{habit.name}</Text>
                 <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>✕</Text>
+                  <Text style={[styles.closeButtonText, { color: theme.colors.textMuted }]}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.sheetSubtitle}>
+              <Text style={[styles.sheetSubtitle, { color: theme.colors.textMuted }]}>
                 {inputMode === 'timer' || inputMode === 'duration_min'
                   ? 'Track your focused time and keep the streak alive.'
                   : inputMode === 'checkin' || inputMode === 'check'
@@ -218,13 +220,13 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
               {renderControls()}
 
               {inputMode !== 'timer' && inputMode !== 'duration_min' && inputMode !== 'checkin' && inputMode !== 'check' && (
-                <Text style={styles.quantityDescriptor}>
+                <Text style={[styles.quantityDescriptor, { color: theme.colors.text }]}>
                   {quantity} {displayUnit}
                 </Text>
               )}
 
               <TouchableOpacity
-                style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.accent }, isLogging && styles.confirmButtonDisabled]}
                 onPress={() => handleConfirm()}
                 disabled={isLogging}
               >
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#edf2f7',
+    backgroundColor: '#141414',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -319,7 +321,7 @@ const styles = StyleSheet.create({
   },
   counterButtonText: {
     fontSize: 30,
-    color: '#2d3748',
+    color: '#EDEDED',
   },
   counterInput: {
     width: 80,
@@ -327,21 +329,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     borderBottomWidth: 2,
-    borderColor: '#cbd5e0',
+    borderColor: '#242424',
     paddingVertical: 4,
+    color: '#EDEDED',
   },
   timerControls: {
     alignItems: 'center',
     gap: 12,
   },
   timerToggle: {
-    backgroundColor: '#4299e1',
+    backgroundColor: '#29E3D7',
     borderRadius: 999,
     paddingHorizontal: 32,
     paddingVertical: 12,
   },
   timerToggleActive: {
-    backgroundColor: '#f56565',
+    backgroundColor: '#FFB020',
   },
   timerToggleText: {
     color: 'white',
@@ -351,7 +354,7 @@ const styles = StyleSheet.create({
   timerDisplay: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#2d3748',
+    color: '#EDEDED',
   },
   timerPresets: {
     flexDirection: 'row',
@@ -361,32 +364,34 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: '#e6fffa',
+    backgroundColor: '#0B0B0B',
+    borderWidth: 1,
+    borderColor: '#242424',
   },
   timerPresetText: {
-    color: '#2c7a7b',
+    color: '#B4B4B4',
     fontWeight: '600',
   },
   checkinControls: {
-    backgroundColor: '#f0fff4',
+    backgroundColor: '#0B0B0B',
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#c6f6d5',
+    borderColor: '#242424',
     gap: 8,
   },
   checkinText: {
     textAlign: 'center',
-    color: '#276749',
+    color: '#5CF279',
     fontSize: 16,
   },
   checkinSubtext: {
     textAlign: 'center',
-    color: '#2f855a',
+    color: '#B4B4B4',
     fontSize: 13,
   },
   confirmButton: {
-    backgroundColor: '#48bb78',
+    backgroundColor: '#29E3D7',
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
