@@ -61,6 +61,8 @@ function AppInner() {
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [hiddenHabitIds, setHiddenHabitIds] = useState<string[]>([]);
+  const [isHiddenModalOpen, setIsHiddenModalOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userHabits, setUserHabits] = useState<UserHabit[]>([]);
   const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
@@ -176,6 +178,27 @@ function AppInner() {
     loadOrder();
   }, [user?.id, userHabits]);
 
+  // Load hidden habits per-user and reconcile with current list
+  useEffect(() => {
+    const loadHidden = async () => {
+      if (!user?.id) return;
+      try {
+        const key = `hiddenHabits:${user.id}`;
+        const stored = await AsyncStorage.getItem(key);
+        const ids: string[] = stored ? JSON.parse(stored) : [];
+        const habitIds = userHabits.map(h => h.id);
+        const filtered = ids.filter(id => habitIds.includes(id));
+        setHiddenHabitIds(filtered);
+        if (JSON.stringify(filtered) !== JSON.stringify(ids)) {
+          await AsyncStorage.setItem(key, JSON.stringify(filtered));
+        }
+      } catch (e) {
+        console.warn('Failed to load hidden habits', e);
+      }
+    };
+    loadHidden();
+  }, [user?.id, userHabits]);
+
   const orderedHabits = useMemo(() => {
     if (!habitOrder.length) return userHabits;
     const idToHabit = new Map(userHabits.map(h => [h.id, h] as const));
@@ -185,6 +208,12 @@ function AppInner() {
     const missing = userHabits.filter(h => !habitOrder.includes(h.id));
     return [...ordered, ...missing];
   }, [userHabits, habitOrder]);
+
+  const visibleHabits = useMemo(() => {
+    if (!hiddenHabitIds.length) return orderedHabits;
+    const hidden = new Set(hiddenHabitIds);
+    return orderedHabits.filter(h => !hidden.has(h.id));
+  }, [orderedHabits, hiddenHabitIds]);
 
   const persistHabitOrder = async (order: string[]) => {
     if (!user?.id) return;
@@ -206,6 +235,27 @@ function AppInner() {
     const [item] = next.splice(from, 1);
     next.splice(to, 0, item);
     persistHabitOrder(next);
+  };
+
+  const persistHidden = async (ids: string[]) => {
+    if (!user?.id) return;
+    const key = `hiddenHabits:${user.id}`;
+    setHiddenHabitIds(ids);
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(ids));
+    } catch (e) {
+      console.warn('Failed to save hidden habits', e);
+    }
+  };
+
+  const hideHabit = (id: string) => {
+    if (hiddenHabitIds.includes(id)) return;
+    persistHidden([...hiddenHabitIds, id]);
+  };
+
+  const unhideHabit = (id: string) => {
+    if (!hiddenHabitIds.includes(id)) return;
+    persistHidden(hiddenHabitIds.filter(x => x !== id));
   };
 
   const loadUserHabits = async (userId?: string) => {
@@ -1121,7 +1171,13 @@ function AppInner() {
           </View>
         ) : (
           <>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <TouchableOpacity
+                onPress={() => setIsHiddenModalOpen(true)}
+                style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
+              >
+                <Text style={{ color: theme.colors.text }}>Hidden ({hiddenHabitIds.length})</Text>
+              </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setIsReorderMode(v => !v)}
               style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
@@ -1130,7 +1186,7 @@ function AppInner() {
             </TouchableOpacity>
           </View>
           <View style={styles.habitsList}>
-              {orderedHabits.map((habit, idx) => {
+              {visibleHabits.map((habit, idx) => {
                 const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
                 const now = new Date();
                 // For checkin habits, check actual entries instead of lastLogged date
@@ -1186,10 +1242,16 @@ function AppInner() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => moveHabit(idx, 1)}
-                      disabled={idx === orderedHabits.length - 1}
-                      style={[styles.reorderBtn, idx === orderedHabits.length - 1 && { opacity: 0.4 }]}
+                      disabled={idx === visibleHabits.length - 1}
+                      style={[styles.reorderBtn, idx === visibleHabits.length - 1 && { opacity: 0.4 }]}
                     >
                       <Text style={[styles.reorderBtnText, { color: theme.colors.accent }]}>↓</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => hideHabit(habit.id)}
+                      style={[styles.reorderBtn]}
+                    >
+                      <Text style={[styles.reorderBtnText, { color: theme.colors.warn }]}>Hide</Text>
                     </TouchableOpacity>
                   </View>
                 ) : alreadyComplete && isCheckinHabit(habit) ? (
@@ -1283,7 +1345,7 @@ function AppInner() {
         </View>
         
         <View style={styles.quickTapGrid}>
-          {orderedHabits.map((habit) => {
+          {visibleHabits.map((habit) => {
             const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
             const now = new Date();
             const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
@@ -1671,7 +1733,7 @@ const renderRecentActivityModal = () => {
           <Text style={[styles.pickerSubtitle, { color: theme.colors.textMuted }]}>Choose a habit to log right away</Text>
 
             <ScrollView style={{ maxHeight: 320 }}>
-            {orderedHabits.map(habit => {
+            {visibleHabits.map(habit => {
               const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
               const now = new Date();
               const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
@@ -2019,6 +2081,39 @@ const renderRecentActivityModal = () => {
           </View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={{ color: theme.colors.text }}>Coming soon…</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Hidden habits management */}
+      <Modal visible={isHiddenModalOpen} animationType="slide" onRequestClose={() => setIsHiddenModalOpen(false)}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.bg }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Hidden Habits</Text>
+            <TouchableOpacity onPress={() => setIsHiddenModalOpen(false)}>
+              <Text style={[styles.modalClose, { color: theme.colors.warn }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            {hiddenHabitIds.length === 0 ? (
+              <Text style={{ color: theme.colors.textMuted }}>No hidden habits.</Text>
+            ) : (
+              hiddenHabitIds.map(id => {
+                const h = orderedHabits.find(x => x.id === id);
+                if (!h) return null;
+                return (
+                  <View key={id} style={[styles.modalLogRow, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }] }>
+                    <View style={styles.modalLogInfo}>
+                      <Text style={[styles.modalLogTitle, { color: theme.colors.text }]}>{h.emoji} {h.name}</Text>
+                      <Text style={[styles.modalLogSubtitle, { color: theme.colors.textMuted }]}>Hidden from dashboard/logging</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => unhideHabit(id)} style={[styles.deleteButton, { backgroundColor: theme.colors.overlay }]}>
+                      <Text style={[styles.deleteButtonText, { color: theme.colors.accent }]}>Unhide</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -3313,6 +3408,14 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  hiddenPill: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   reorderButtons: {
     flexDirection: 'row',
