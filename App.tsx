@@ -954,7 +954,7 @@ function AppInner() {
       <View style={styles.donutContainer}>
         <Svg width={size} height={size}>
           <Circle
-            stroke="#e2e8f0"
+            stroke={theme.colors.surface2}
             fill="none"
             cx={size / 2}
             cy={size / 2}
@@ -963,7 +963,7 @@ function AppInner() {
           />
           {progress > 0 && (
             <Circle
-              stroke="#48bb78"
+              stroke={theme.colors.accent}
               fill="none"
               cx={size / 2}
               cy={size / 2}
@@ -1177,8 +1177,16 @@ function AppInner() {
             </Text>
           </View>
           <View style={styles.loggingHeroActions}>
-            <TouchableOpacity style={[styles.loggingPrimaryButton, { backgroundColor: theme.colors.success }]} onPress={() => setAppState('dashboard')}>
-              <Text style={styles.loggingPrimaryText}>Back to dashboard</Text>
+            <TouchableOpacity
+              style={[
+                styles.loggingPrimaryButton,
+                name === 'dark-glass'
+                  ? { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.accent }
+                  : { backgroundColor: theme.colors.accent }
+              ]}
+              onPress={() => setAppState('dashboard')}
+            >
+              <Text style={[styles.loggingPrimaryText, name === 'dark-glass' ? { color: theme.colors.accent } : null]}>Back to dashboard</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.loggingSecondaryButton, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]} onPress={() => setAppState('habit-selection')}>
               <Text style={[styles.loggingSecondaryText, { color: theme.colors.accent }]}>+ Add habit</Text>
@@ -1213,9 +1221,9 @@ function AppInner() {
               >
                 <View style={styles.quickTapHeader}>
               <Text style={[styles.quickTapName, { color: theme.colors.text }]}>{habit.name}</Text>
-                  <Text style={disabled ? [styles.quickTapStatus, { color: theme.colors.textMuted }] : [styles.quickTapStatusActive, { color: theme.colors.success }]}>
+                  {/* <Text style={disabled ? [styles.quickTapStatus, { color: theme.colors.textMuted }] : [styles.quickTapStatusActive, { color: theme.colors.success }]}>
                     {disabled ? 'Done' : 'Ready'}
-                  </Text>
+                  </Text> */}
                 </View>
                 <Text style={[styles.quickTapMeta, { color: theme.colors.textMuted }]}>🔥 {habit.streak} day streak • {habit.totalLogged} total</Text>
                 <View style={styles.quickTapGoal}>{renderGoalModule(habit, 'compact')}</View>
@@ -1375,12 +1383,15 @@ function AppInner() {
 
     return (
       <View style={containerStyle}>
-        <View style={[styles.goalModuleTrack, size === 'compact' && styles.goalModuleTrackCompact]}>
+        <View style={[styles.goalModuleTrack, size === 'compact' && styles.goalModuleTrackCompact, { backgroundColor: theme.colors.surface2 }]}>
           <Animated.View
             style={[
               styles.goalModuleFill,
               isOverflow && styles.goalModuleFillOver,
-              { width: `${clampedPercent}%` },
+              {
+                width: `${clampedPercent}%`,
+                backgroundColor: isOverflow ? theme.colors.warn : theme.colors.accent,
+              },
             ]}
           />
           {isOverflow && (
@@ -1395,15 +1406,15 @@ function AppInner() {
         </View>
         <View style={styles.goalModuleFooter}>
           <View style={styles.goalModuleText}>
-            <Text style={styles.goalModuleValue}>
+            <Text style={[styles.goalModuleValue, { color: theme.colors.text }]}>
               {Math.round(value)}/{target} {unit}
             </Text>
-            <Text style={styles.goalModulePeriod}>
+            <Text style={[styles.goalModulePeriod, { color: theme.colors.textMuted }]}>
               {periodLabel}
             </Text>
           </View>
           <TouchableOpacity onPress={() => setGoalModalHabit(habit)}>
-            <Text style={styles.goalModuleAction}>Edit</Text>
+            <Text style={[styles.goalModuleAction, { color: theme.colors.accent }]}>Edit</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1423,8 +1434,18 @@ function AppInner() {
             <Text style={styles.goalValue}>{value}{unit ? `/${target}${unit}` : `/${target}`}</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.goalBarTrack}>
-          <View style={[styles.goalBarFill, { width: `${percent}%` }]} />
+        <View style={[styles.goalBarTrack, { backgroundColor: theme.colors.surface2 }]}>
+          <View style={[
+            styles.goalBarFill,
+            {
+              width: `${percent}%`,
+              backgroundColor: percent >= 100 ? theme.colors.warn : theme.colors.accent,
+              shadowColor: percent >= 100 ? theme.colors.warn : 'transparent',
+              shadowOpacity: percent >= 100 ? 0.4 : 0,
+              shadowRadius: percent >= 100 ? 4 : 0,
+              shadowOffset: percent >= 100 ? { width: 0, height: 2 } : { width: 0, height: 0 },
+            }
+          ]} />
         </View>
       </View>
     );
@@ -1437,11 +1458,11 @@ const renderRecentActivityModal = () => {
 
     return (
       <Modal visible={isRecentActivityModalVisible} animationType="slide" onRequestClose={() => setIsRecentActivityModalVisible(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Recent Activity</Text>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.bg }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }] }>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Recent Activity</Text>
             <TouchableOpacity onPress={() => setIsRecentActivityModalVisible(false)}>
-              <Text style={styles.modalClose}>Close</Text>
+              <Text style={[styles.modalClose, { color: theme.colors.warn }]}>Close</Text>
             </TouchableOpacity>
           </View>
 
@@ -1450,10 +1471,20 @@ const renderRecentActivityModal = () => {
               {(['today', 'week', 'month', 'quarter'] as const).map(window => (
                 <TouchableOpacity
                   key={window}
-                  style={[styles.filterChip, recentEntriesLimit === window && styles.filterChipActive]}
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: theme.colors.surface2 },
+                    recentEntriesLimit === window && { backgroundColor: theme.colors.accent },
+                  ]}
                   onPress={() => setRecentEntriesLimit(window)}
                 >
-                  <Text style={[styles.filterChipText, recentEntriesLimit === window && styles.filterChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      { color: theme.colors.text },
+                      recentEntriesLimit === window && { color: theme.colors.text },
+                    ]}
+                  >
                     {window === 'today' ? 'Today' : window === 'week' ? 'Last 7 days' : window === 'month' ? 'Last 30 days' : 'Last 90 days'}
                   </Text>
             </TouchableOpacity>
@@ -1462,18 +1493,26 @@ const renderRecentActivityModal = () => {
         
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.habitFilterRow}>
         <TouchableOpacity 
-                style={[styles.habitFilterChip, !selectedHabitFilter && styles.habitFilterChipActive]}
+                style={[
+                  styles.habitFilterChip,
+                  { backgroundColor: theme.colors.surface2 },
+                  !selectedHabitFilter && { backgroundColor: theme.colors.accent },
+                ]}
                 onPress={() => setSelectedHabitFilter(null)}
         >
-                <Text style={[styles.habitFilterText, !selectedHabitFilter && styles.habitFilterTextActive]}>All Habits</Text>
+                <Text style={[styles.habitFilterText, { color: theme.colors.text } ]}>All Habits</Text>
         </TouchableOpacity>
               {habitFilters.map(habit => (
                 <TouchableOpacity
                   key={habit.id}
-                  style={[styles.habitFilterChip, selectedHabitFilter === habit.id && styles.habitFilterChipActive]}
+                  style={[
+                    styles.habitFilterChip,
+                    { backgroundColor: theme.colors.surface2 },
+                    selectedHabitFilter === habit.id && { backgroundColor: theme.colors.accent },
+                  ]}
                   onPress={() => setSelectedHabitFilter(selectedHabitFilter === habit.id ? null : habit.id)}
                 >
-                  <Text style={[styles.habitFilterText, selectedHabitFilter === habit.id && styles.habitFilterTextActive]}>
+                  <Text style={[styles.habitFilterText, { color: theme.colors.text }]}>
                     {habit.emoji} {habit.name}
                   </Text>
                 </TouchableOpacity>
@@ -1482,21 +1521,21 @@ const renderRecentActivityModal = () => {
 
             {filteredEntries.length === 0 ? (
               <View style={styles.emptyModalState}>
-                <Text style={styles.emptyModalText}>No activity in this range.</Text>
+                <Text style={[styles.emptyModalText, { color: theme.colors.textMuted }]}>No activity in this range.</Text>
               </View>
             ) : (
               <>
                 {filteredEntries.map(entry => (
-                  <View key={entry.id} style={styles.modalLogRow}>
+                  <View key={entry.id} style={[styles.modalLogRow, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}>
                     <View style={styles.modalLogInfo}>
-                      <Text style={styles.modalLogTitle}>{entry.habit?.emoji || '📝'} {entry.habit?.name || 'Habit'}</Text>
-                      <Text style={styles.modalLogSubtitle}>{formatEntrySummary(entry)}</Text>
+                      <Text style={[styles.modalLogTitle, { color: theme.colors.text }]}>{entry.habit?.emoji || '📝'} {entry.habit?.name || 'Habit'}</Text>
+                      <Text style={[styles.modalLogSubtitle, { color: theme.colors.textMuted }]}>{formatEntrySummary(entry)}</Text>
                     </View>
                     <View style={styles.modalLogMeta}>
-                      <Text style={styles.modalLogDate}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
-                      <Text style={styles.modalLogTime}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                      <Text style={[styles.modalLogDate, { color: theme.colors.textMuted }]}>{new Date(entry.logged_at).toLocaleDateString()}</Text>
+                      <Text style={[styles.modalLogTime, { color: theme.colors.textMuted }]}>{new Date(entry.logged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                       <TouchableOpacity onPress={() => handleDeleteEntry(entry.id)} style={styles.modalDeleteButton}>
-                        <Text style={styles.modalDeleteButtonText}>Delete</Text>
+                        <Text style={[styles.modalDeleteButtonText, { color: theme.colors.warn }]}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1504,7 +1543,7 @@ const renderRecentActivityModal = () => {
                 
                 {hasMoreEntries && (
                   <TouchableOpacity 
-                    style={styles.loadMoreButton}
+                    style={[styles.loadMoreButton, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
                     onPress={() => {
                       if (isLoadingMore || !user?.id) return;
                       setIsLoadingMore(true);
@@ -1514,7 +1553,7 @@ const renderRecentActivityModal = () => {
                     }}
                     disabled={isLoadingMore}
                   >
-                    <Text style={styles.loadMoreButtonText}>
+                    <Text style={[styles.loadMoreButtonText, { color: theme.colors.accent }]}>
                       {isLoadingMore ? 'Loading...' : 'Load more entries'}
                     </Text>
                   </TouchableOpacity>
@@ -1544,9 +1583,9 @@ const renderRecentActivityModal = () => {
   const renderQuickLogPicker = () => (
     <Modal visible={isQuickLogPickerVisible} animationType="fade" transparent onRequestClose={() => setIsQuickLogPickerVisible(false)}>
       <View style={styles.pickerBackdrop}>
-        <View style={styles.pickerSheet}>
-          <Text style={styles.pickerTitle}>Quick log</Text>
-          <Text style={styles.pickerSubtitle}>Choose a habit to log right away</Text>
+        <View style={[styles.pickerSheet, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}>
+          <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>Quick log</Text>
+          <Text style={[styles.pickerSubtitle, { color: theme.colors.textMuted }]}>Choose a habit to log right away</Text>
 
           <ScrollView style={{ maxHeight: 320 }}>
             {userHabits.map(habit => {
@@ -1561,7 +1600,7 @@ const renderRecentActivityModal = () => {
               return (
                 <TouchableOpacity
                   key={habit.id}
-                  style={[styles.pickerRow, disabled && styles.pickerRowDisabled]}
+                  style={[styles.pickerRow, { borderBottomColor: theme.colors.border }, disabled && styles.pickerRowDisabled]}
                   onPress={() => {
                     if (disabled) return;
                     setIsQuickLogPickerVisible(false);
@@ -1571,11 +1610,11 @@ const renderRecentActivityModal = () => {
                 >
                   <Text style={styles.pickerEmoji}>{habit.emoji}</Text>
                   <View style={styles.pickerInfo}>
-                    <Text style={styles.pickerHabitName}>{habit.name}</Text>
+                    <Text style={[styles.pickerHabitName, { color: theme.colors.text }]}>{habit.name}</Text>
                     {disabled ? (
-                      <Text style={styles.pickerHabitMeta}>Logged today</Text>
+                      <Text style={[styles.pickerHabitMeta, { color: theme.colors.textMuted }]}>Logged today</Text>
                     ) : (
-                      <Text style={styles.pickerHabitMeta}>{habit.streak} day streak • {habit.totalLogged} total</Text>
+                      <Text style={[styles.pickerHabitMeta, { color: theme.colors.textMuted }]}>{habit.streak} day streak • {habit.totalLogged} total</Text>
                     )}
                     {renderGoalModule(habit, 'compact')}
 
@@ -1586,7 +1625,7 @@ const renderRecentActivityModal = () => {
           </ScrollView>
 
           <TouchableOpacity style={styles.pickerCancel} onPress={() => setIsQuickLogPickerVisible(false)}>
-            <Text style={styles.pickerCancelText}>Cancel</Text>
+            <Text style={[styles.pickerCancelText, { color: theme.colors.accent }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </View>

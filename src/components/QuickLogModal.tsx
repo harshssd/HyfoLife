@@ -22,7 +22,8 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   onConfirm,
   isLogging,
 }) => {
-  const { theme } = useTheme();
+  const { theme, name } = useTheme();
+  const isGlass = name === 'dark-glass';
   const styles = createStyles(theme);
   const starterMeta = useMemo(() => {
     if (!habit) return null;
@@ -158,10 +159,14 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const renderTimerControls = () => (
     <View style={styles.timerControls}>
       <TouchableOpacity
-        style={[styles.timerToggle, timerRunning && styles.timerToggleActive]}
+        style={[
+          styles.timerToggle,
+          timerRunning && styles.timerToggleActive,
+          isGlass && { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: timerRunning ? theme.colors.warn : theme.colors.accent },
+        ]}
         onPress={() => setTimerRunning((prev) => !prev)}
       >
-        <Text style={styles.timerToggleText}>{timerRunning ? 'Stop' : 'Start'}</Text>
+        <Text style={[styles.timerToggleText, isGlass ? { color: timerRunning ? theme.colors.warn : theme.colors.accent } : null]}>{timerRunning ? 'Stop' : 'Start'}</Text>
       </TouchableOpacity>
       <Text style={styles.timerDisplay}>{formatDuration(elapsedSeconds)}</Text>
       <View style={styles.timerPresets}>
@@ -228,11 +233,15 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
               )}
 
               <TouchableOpacity
-                style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
+                style={[
+                  styles.confirmButton,
+                  isGlass ? { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.accent } : null,
+                  isLogging && styles.confirmButtonDisabled,
+                ]}
                 onPress={() => handleConfirm()}
                 disabled={isLogging}
               >
-                <Text style={styles.confirmButtonText}>
+                <Text style={[styles.confirmButtonText, isGlass ? { color: theme.colors.accent } : null]}>
                   {isLogging ? 'Saving…' : 'Log it'}
                 </Text>
               </TouchableOpacity>
