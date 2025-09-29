@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { HeatmapDay } from '../types';
 import { useTheme } from '../theme/ThemeProvider';
+import { glyphFor } from '../theme/ornaments';
 
 interface HeatmapTileProps {
   day: HeatmapDay;
@@ -19,6 +20,7 @@ const HeatmapTile: React.FC<HeatmapTileProps> = ({ day, size = 24, onPress }) =>
   const clampedPercent = Math.min(day.goalPercent, 100);
   const isComplete = day.goalPercent >= 100;
 
+  const tileGlyph = glyphFor((theme as any).ornaments?.tileGlyph);
   const content = (
     <View style={[styles.tile, { width: size, height: size, backgroundColor: baseColor, borderColor: theme.colors.border }]}> 
       {clampedPercent > 0 && (
@@ -37,10 +39,14 @@ const HeatmapTile: React.FC<HeatmapTileProps> = ({ day, size = 24, onPress }) =>
           }}
         />
       )}
-      {isComplete && (
-        <View style={[styles.badge, { backgroundColor: theme.colors.surface }]}> 
-          <Text style={[styles.badgeText]}>⭐</Text>
-        </View>
+      {tileGlyph && (
+        <Text
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          style={{ position: 'absolute', left: -1, bottom: -4, fontSize: size * 0.5, opacity: 0.18 }}
+        >
+          {tileGlyph === 'bat' ? '🦇' : tileGlyph === 'bolt' ? '⚡' : tileGlyph === 'claw' ? '✨' : tileGlyph === 'web' ? '🕸️' : tileGlyph === 'shield' ? '🛡️' : '⭐'}
+        </Text>
       )}
       <Text style={[styles.dayText, { color: theme.colors.text }]}>{new Date(day.date).getDate()}</Text>
     </View>
@@ -75,21 +81,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
   },
-  badge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#fff',
-    borderRadius: 999,
-    padding: 2,
-  },
-  badgeText: {
-    fontSize: 10,
-  },
   dayText: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#1a202c',
   },
 });
 
