@@ -1953,17 +1953,18 @@ const BottomActionBar = ({
   onNavigateDashboard: () => void;
   onOpenQuickLog: () => void;
 }) => {
-  const { theme } = useTheme();
+  const { theme, name } = useTheme();
+  const isGlass = name === 'dark-glass';
   if (appState === 'dashboard') {
     const quickLogLabel = habits.length === 1 ? `Quick log ${habits[0].emoji}` : 'Quick log';
     return (
-      <SafeAreaView style={[styles.bottomBarSafeArea, { backgroundColor: theme.colors.surface }] }>
-        <View style={[styles.bottomBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }] }>
-          <TouchableOpacity style={[styles.bottomBarSecondary, { borderColor: theme.colors.border }]} onPress={onOpenQuickLog}>
+      <SafeAreaView style={[styles.bottomBarSafeArea, { backgroundColor: isGlass ? 'transparent' : theme.colors.surface } ]}>
+        <View style={[styles.bottomBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border } ]}>
+          <TouchableOpacity style={[styles.bottomBarSecondary, isGlass ? { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border } : { borderColor: theme.colors.border }]} onPress={onOpenQuickLog}>
             <Text style={[styles.bottomBarSecondaryText, { color: theme.colors.text }]}>{quickLogLabel}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.bottomBarPrimary, { backgroundColor: theme.colors.accent }]} onPress={onNavigateLogging}>
-            <Text style={[styles.bottomBarPrimaryText]}>Open logging hub</Text>
+          <TouchableOpacity style={[styles.bottomBarPrimary, isGlass ? { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.accent } : { backgroundColor: theme.colors.accent }]} onPress={onNavigateLogging}>
+            <Text style={[styles.bottomBarPrimaryText, isGlass ? { color: theme.colors.accent } : null]}>Open logging hub</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1972,10 +1973,10 @@ const BottomActionBar = ({
 
   if (appState === 'logging') {
     return (
-      <SafeAreaView style={[styles.bottomBarSafeArea]}>
+      <SafeAreaView style={[styles.bottomBarSafeArea, { backgroundColor: isGlass ? 'transparent' : theme.colors.surface }]}>
         <View style={[styles.bottomBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-          <TouchableOpacity style={[styles.bottomBarPrimary, { backgroundColor: theme.colors.accent }]} onPress={onNavigateDashboard}>
-            <Text style={[styles.bottomBarPrimaryText]}>Back to dashboard</Text>
+          <TouchableOpacity style={[styles.bottomBarPrimary, isGlass ? { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.accent } : { backgroundColor: theme.colors.accent }]} onPress={onNavigateDashboard}>
+            <Text style={[styles.bottomBarPrimaryText, isGlass ? { color: theme.colors.accent } : null]}>Back to dashboard</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
