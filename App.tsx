@@ -1166,29 +1166,29 @@ function AppInner() {
   );
 
   const renderLogging = () => (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       <ScrollView contentContainerStyle={[styles.scrollContent, styles.loggingScroll]}>
-        <View style={styles.loggingHero}>
+        <View style={[styles.loggingHero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
           <View style={styles.loggingHeroCopy}>
-            <Text style={styles.loggingHeroEyebrow}>Logging hub</Text>
-            <Text style={styles.loggingHeroTitle}>Capture today's reps in seconds</Text>
-            <Text style={styles.loggingHeroSubtitle}>
+            <Text style={[styles.loggingHeroEyebrow, { color: theme.colors.accent }]}>Logging hub</Text>
+            <Text style={[styles.loggingHeroTitle, { color: theme.colors.text }]}>Capture today's reps in seconds</Text>
+            <Text style={[styles.loggingHeroSubtitle, { color: theme.colors.textMuted }]}>
               Tap a habit card to quick log. Goals and streaks stay in view so every tap keeps momentum.
             </Text>
           </View>
           <View style={styles.loggingHeroActions}>
-            <TouchableOpacity style={styles.loggingPrimaryButton} onPress={() => setAppState('dashboard')}>
+            <TouchableOpacity style={[styles.loggingPrimaryButton, { backgroundColor: theme.colors.success }]} onPress={() => setAppState('dashboard')}>
               <Text style={styles.loggingPrimaryText}>Back to dashboard</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.loggingSecondaryButton} onPress={() => setAppState('habit-selection')}>
-              <Text style={styles.loggingSecondaryText}>+ Add habit</Text>
+            <TouchableOpacity style={[styles.loggingSecondaryButton, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]} onPress={() => setAppState('habit-selection')}>
+              <Text style={[styles.loggingSecondaryText, { color: theme.colors.accent }]}>+ Add habit</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.loggingSectionHeader}>
-          <Text style={styles.loggingSectionTitle}>Quick log habits</Text>
-          <Text style={styles.loggingSectionSubtitle}>Tap to open the quick log modal. Disabled cards are done for today.</Text>
+          <Text style={[styles.loggingSectionTitle, { color: theme.colors.text }]}>Quick log habits</Text>
+          <Text style={[styles.loggingSectionSubtitle, { color: theme.colors.textMuted }]}>Tap to open the quick log modal. Disabled cards are done for today.</Text>
         </View>
         
         <View style={styles.quickTapGrid}>
@@ -1204,7 +1204,7 @@ function AppInner() {
             return (
             <TouchableOpacity
               key={habit.id}
-                style={[styles.quickTapCard, disabled && styles.quickTapCardDisabled]}
+                style={[styles.quickTapCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, disabled && styles.quickTapCardDisabled]}
                 onPress={() => {
                   if (disabled) return;
                   setActiveLogHabit(habit);
@@ -1212,18 +1212,18 @@ function AppInner() {
                 disabled={disabled}
               >
                 <View style={styles.quickTapHeader}>
-              <Text style={styles.quickTapName}>{habit.name}</Text>
-                  <Text style={disabled ? styles.quickTapStatus : styles.quickTapStatusActive}>
+              <Text style={[styles.quickTapName, { color: theme.colors.text }]}>{habit.name}</Text>
+                  <Text style={disabled ? [styles.quickTapStatus, { color: theme.colors.textMuted }] : [styles.quickTapStatusActive, { color: theme.colors.success }]}>
                     {disabled ? 'Done' : 'Ready'}
                   </Text>
                 </View>
-                <Text style={styles.quickTapMeta}>🔥 {habit.streak} day streak • {habit.totalLogged} total</Text>
+                <Text style={[styles.quickTapMeta, { color: theme.colors.textMuted }]}>🔥 {habit.streak} day streak • {habit.totalLogged} total</Text>
                 <View style={styles.quickTapGoal}>{renderGoalModule(habit, 'compact')}</View>
                 <View style={styles.quickTapFooter}>
-                  <Text style={styles.quickTapActionText}>
+                  <Text style={[styles.quickTapActionText, { color: theme.colors.accent }]}>
                     {disabled ? 'Come back tomorrow' : 'Tap to log new progress'}
                   </Text>
-                  <Text style={styles.quickTapChevron}>→</Text>
+                  <Text style={[styles.quickTapChevron, { color: theme.colors.textMuted }]}>→</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -2331,7 +2331,6 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   quickTapCard: {
-    backgroundColor: 'white',
     width: '48%',
     padding: 20,
     borderRadius: 16,
@@ -2342,6 +2341,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
     gap: 8,
+    borderWidth: 1,
   },
   quickTapEmoji: {
     fontSize: 40,
@@ -2350,7 +2350,6 @@ const styles = StyleSheet.create({
   quickTapName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#2d3748',
   },
   toast: {
     position: 'absolute',
@@ -3174,7 +3173,6 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   loggingHero: {
-    backgroundColor: '#f7fafc',
     borderRadius: 24,
     padding: 20,
     marginBottom: 24,
@@ -3184,6 +3182,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
     gap: 16,
+    borderWidth: 1,
   },
   loggingHeroCopy: {
     gap: 8,
@@ -3193,16 +3192,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
     fontWeight: '700',
-    color: '#63b3ed',
   },
   loggingHeroTitle: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#1a202c',
   },
   loggingHeroSubtitle: {
     fontSize: 14,
-    color: '#4a5568',
     lineHeight: 20,
   },
   loggingHeroActions: {
@@ -3211,7 +3207,6 @@ const styles = StyleSheet.create({
   },
   loggingPrimaryButton: {
     flex: 1,
-    backgroundColor: '#48bb78',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -3227,11 +3222,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#cbd5e0',
-    backgroundColor: '#fff',
   },
   loggingSecondaryText: {
-    color: '#2b6cb0',
     fontWeight: '600',
     fontSize: 14,
   },
@@ -3242,11 +3234,9 @@ const styles = StyleSheet.create({
   loggingSectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1a202c',
   },
   loggingSectionSubtitle: {
     fontSize: 13,
-    color: '#4a5568',
   },
   quickTapList: {
     gap: 14,
@@ -3259,18 +3249,15 @@ const styles = StyleSheet.create({
   quickTapStatus: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#718096',
     textTransform: 'uppercase',
   },
   quickTapStatusActive: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#48bb78',
     textTransform: 'uppercase',
   },
   quickTapMeta: {
     fontSize: 13,
-    color: '#4a5568',
   },
   quickTapGoal: {
     marginTop: 4,
@@ -3283,12 +3270,17 @@ const styles = StyleSheet.create({
   },
   quickTapActionText: {
     fontSize: 13,
-    color: '#2b6cb0',
     fontWeight: '600',
   },
   quickTapChevron: {
     fontSize: 18,
-    color: '#a0aec0',
+  },
+  donutContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentEmptyText: {
+    fontSize: 14,
   },
   loadMoreButton: {
     backgroundColor: '#f7fafc',

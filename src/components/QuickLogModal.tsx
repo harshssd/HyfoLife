@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { Theme } from '../theme/tokens';
 import { UserHabit } from '../types';
 import { STARTER_HABITS } from '../data/starterHabits';
 
@@ -22,6 +23,7 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   isLogging,
 }) => {
   const { theme } = useTheme();
+  const styles = createStyles(theme);
   const starterMeta = useMemo(() => {
     if (!habit) return null;
     return STARTER_HABITS.find((starter) => starter.name.toLowerCase() === habit.name.toLowerCase());
@@ -201,15 +203,15 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
           >
-            <View style={[styles.sheet, { backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border }]}> 
+            <View style={styles.sheet}> 
               <View style={styles.sheetHeader}>
                 <Text style={styles.sheetEmoji}>{habit.emoji}</Text>
-                <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{habit.name}</Text>
+                <Text style={styles.sheetTitle}>{habit.name}</Text>
                 <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-                  <Text style={[styles.closeButtonText, { color: theme.colors.textMuted }]}>✕</Text>
+                  <Text style={styles.closeButtonText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={[styles.sheetSubtitle, { color: theme.colors.textMuted }]}>
+              <Text style={styles.sheetSubtitle}>
                 {inputMode === 'timer' || inputMode === 'duration_min'
                   ? 'Track your focused time and keep the streak alive.'
                   : inputMode === 'checkin' || inputMode === 'check'
@@ -220,13 +222,13 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
               {renderControls()}
 
               {inputMode !== 'timer' && inputMode !== 'duration_min' && inputMode !== 'checkin' && inputMode !== 'check' && (
-                <Text style={[styles.quantityDescriptor, { color: theme.colors.text }]}>
+                <Text style={styles.quantityDescriptor}>
                   {quantity} {displayUnit}
                 </Text>
               )}
 
               <TouchableOpacity
-                style={[styles.confirmButton, { backgroundColor: theme.colors.accent }, isLogging && styles.confirmButtonDisabled]}
+                style={[styles.confirmButton, isLogging && styles.confirmButtonDisabled]}
                 onPress={() => handleConfirm()}
                 disabled={isLogging}
               >
@@ -249,7 +251,7 @@ function formatDuration(totalSeconds: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: Theme) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -263,7 +265,7 @@ const styles = StyleSheet.create({
   sheet: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: 'white',
+    backgroundColor: theme.colors.surface,
     borderRadius: 28,
     padding: 24,
     gap: 16,
@@ -272,6 +274,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
     elevation: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   sheetHeader: {
     flexDirection: 'row',
@@ -285,7 +289,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#1a202c',
+    color: theme.colors.text,
   },
   closeButton: {
     position: 'absolute',
@@ -295,11 +299,11 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     fontSize: 20,
-    color: '#a0aec0',
+    color: theme.colors.textMuted,
   },
   sheetSubtitle: {
     fontSize: 15,
-    color: '#4a5568',
+    color: theme.colors.textMuted,
     textAlign: 'center',
   },
   counterControls: {
@@ -312,16 +316,18 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#141414',
+    backgroundColor: theme.colors.surface2,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   counterButtonDisabled: {
     opacity: 0.4,
   },
   counterButtonText: {
     fontSize: 30,
-    color: '#EDEDED',
+    color: theme.colors.text,
   },
   counterInput: {
     width: 80,
@@ -329,22 +335,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     borderBottomWidth: 2,
-    borderColor: '#242424',
+    borderColor: theme.colors.border,
     paddingVertical: 4,
-    color: '#EDEDED',
+    color: theme.colors.text,
   },
   timerControls: {
     alignItems: 'center',
     gap: 12,
   },
   timerToggle: {
-    backgroundColor: '#29E3D7',
+    backgroundColor: theme.colors.accent,
     borderRadius: 999,
     paddingHorizontal: 32,
     paddingVertical: 12,
   },
   timerToggleActive: {
-    backgroundColor: '#FFB020',
+    backgroundColor: theme.colors.warn,
   },
   timerToggleText: {
     color: 'white',
@@ -354,7 +360,7 @@ const styles = StyleSheet.create({
   timerDisplay: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#EDEDED',
+    color: theme.colors.text,
   },
   timerPresets: {
     flexDirection: 'row',
@@ -364,34 +370,34 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 14,
-    backgroundColor: '#0B0B0B',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#242424',
+    borderColor: theme.colors.border,
   },
   timerPresetText: {
-    color: '#B4B4B4',
+    color: theme.colors.textMuted,
     fontWeight: '600',
   },
   checkinControls: {
-    backgroundColor: '#0B0B0B',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#242424',
+    borderColor: theme.colors.border,
     gap: 8,
   },
   checkinText: {
     textAlign: 'center',
-    color: '#5CF279',
+    color: theme.colors.success,
     fontSize: 16,
   },
   checkinSubtext: {
     textAlign: 'center',
-    color: '#B4B4B4',
+    color: theme.colors.textMuted,
     fontSize: 13,
   },
   confirmButton: {
-    backgroundColor: '#29E3D7',
+    backgroundColor: theme.colors.accent,
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
@@ -406,7 +412,7 @@ const styles = StyleSheet.create({
   },
   quantityDescriptor: {
     fontSize: 16,
-    color: '#4a5568',
+    color: theme.colors.text,
     textAlign: 'center',
   },
 });
