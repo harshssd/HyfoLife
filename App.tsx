@@ -89,7 +89,7 @@ function AppInner() {
   const [goalModalHabit, setGoalModalHabit] = useState<UserHabit | null>(null);
   const [heatmapData, setHeatmapData] = useState<Record<string, HeatmapDay[]>>({});
   const flameAnimRefs = useRef<Record<string, Animated.Value>>({});
-  const { theme } = useTheme();
+  const { theme, name } = useTheme();
   const [themesModalOpen, setThemesModalOpen] = useState(false);
 
   useEffect(() => {
@@ -873,57 +873,70 @@ function AppInner() {
     </SafeAreaView>
   );
 
-  const renderHabitSelection = () => (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.screenTitle}>Choose Your Starter Habits</Text>
-        <Text style={styles.screenSubtitle}>Pick habits you want to track</Text>
-        
-        <View style={styles.habitsGrid}>
-          {STARTER_HABITS.map((habit) => (
-            <TouchableOpacity
-              key={habit.id}
-              style={[
-                styles.habitCard,
-                selectedHabits.includes(habit.id) && styles.habitCardSelected
-              ]}
-              onPress={() => {
-                if (selectedHabits.includes(habit.id)) {
-                  setSelectedHabits(selectedHabits.filter(id => id !== habit.id));
-                } else {
-                  setSelectedHabits([...selectedHabits, habit.id]);
-                }
-              }}
-            >
-              <Text style={styles.habitEmoji}>{habit.emoji}</Text>
-              <Text style={styles.habitName}>{habit.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        <TouchableOpacity 
-          style={[styles.primaryButton, selectedHabits.length === 0 && styles.disabledButton]}
-          onPress={createUserHabits}
-          disabled={selectedHabits.length === 0 || isLoading}
-        >
-          <Text style={styles.buttonText}>
-            {isLoading ? 'Creating...' : `Create ${selectedHabits.length} Habits`}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          onPress={() => {
-            setSelectedHabits([]);
-            setAppState('dashboard');
-          }}
-          disabled={isLoading}
-        >
-          <Text style={styles.secondaryButtonText}>Skip for now → Dashboard</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
+  const renderHabitSelection = () => {
+    const isGlass = name === 'dark-glass';
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Text style={[styles.screenTitle, { color: theme.colors.text }]}>Choose Your Starter Habits</Text>
+          <Text style={[styles.screenSubtitle, { color: theme.colors.textMuted }]}>Pick habits you want to track</Text>
+
+          <View style={styles.habitsGrid}>
+            {STARTER_HABITS.map((habit) => {
+              const selected = selectedHabits.includes(habit.id);
+              return (
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[
+                    styles.habitCard,
+                    { backgroundColor: isGlass ? theme.colors.surface2 : theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border },
+                    selected && (isGlass
+                      ? { backgroundColor: theme.colors.surface2, borderColor: theme.colors.accent }
+                      : { backgroundColor: theme.colors.accent, borderColor: theme.colors.accent })
+                  ]}
+                  onPress={() => {
+                    if (selected) {
+                      setSelectedHabits(selectedHabits.filter(id => id !== habit.id));
+                    } else {
+                      setSelectedHabits([...selectedHabits, habit.id]);
+                    }
+                  }}
+                >
+                  <Text style={[styles.habitEmoji]}>{habit.emoji}</Text>
+                  <Text style={[styles.habitName, selected && !isGlass ? { color: '#000' } : { color: theme.colors.text }]}>{habit.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              isGlass ? { backgroundColor: theme.colors.surface2, borderWidth: 1, borderColor: theme.colors.accent } : { backgroundColor: theme.colors.accent },
+              selectedHabits.length === 0 && styles.disabledButton,
+            ]}
+            onPress={createUserHabits}
+            disabled={selectedHabits.length === 0 || isLoading}
+          >
+            <Text style={[styles.buttonText, isGlass ? { color: theme.colors.accent } : null]}>
+              {isLoading ? 'Creating...' : `Create ${selectedHabits.length} Habits`}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.secondaryButton, { backgroundColor: isGlass ? theme.colors.surface2 : 'transparent' }]}
+            onPress={() => {
+              setSelectedHabits([]);
+              setAppState('dashboard');
+            }}
+            disabled={isLoading}
+          >
+            <Text style={[styles.secondaryButtonText, { color: theme.colors.text }]}>Skip for now → Dashboard</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  };
 
   const longestStreak = userHabits.reduce((max, habit) => Math.max(max, habit.streak || 0), 0);
   const totalHabits = userHabits.length;
