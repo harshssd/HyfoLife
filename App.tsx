@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, FlatList, Animated } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { supabase } from './src/config/supabase';
@@ -56,6 +57,10 @@ const hasMetGoalForToday = (
 
 function AppInner() {
   const [appState, setAppState] = useState<AppState>('onboarding');
+  const [habitOrder, setHabitOrder] = useState<string[]>([]);
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userHabits, setUserHabits] = useState<UserHabit[]>([]);
   const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
@@ -146,6 +151,61 @@ function AppInner() {
       console.error('Auth check error:', error);
       setAppState('onboarding');
     }
+  };
+
+  // Load and reconcile habit order whenever user or habits change
+  useEffect(() => {
+    const loadOrder = async () => {
+      if (!user?.id) return;
+      try {
+        const key = `habitOrder:${user.id}`;
+        const stored = await AsyncStorage.getItem(key);
+        const storedOrder: string[] = stored ? JSON.parse(stored) : [];
+        const habitIds = userHabits.map(h => h.id);
+        const filtered = storedOrder.filter(id => habitIds.includes(id));
+        const missing = habitIds.filter(id => !filtered.includes(id));
+        const next = [...filtered, ...missing];
+        setHabitOrder(next);
+        if (JSON.stringify(next) !== JSON.stringify(storedOrder)) {
+          await AsyncStorage.setItem(key, JSON.stringify(next));
+        }
+      } catch (e) {
+        console.warn('Failed to load habit order', e);
+      }
+    };
+    loadOrder();
+  }, [user?.id, userHabits]);
+
+  const orderedHabits = useMemo(() => {
+    if (!habitOrder.length) return userHabits;
+    const idToHabit = new Map(userHabits.map(h => [h.id, h] as const));
+    const ordered = habitOrder
+      .map(id => idToHabit.get(id))
+      .filter(Boolean) as UserHabit[];
+    const missing = userHabits.filter(h => !habitOrder.includes(h.id));
+    return [...ordered, ...missing];
+  }, [userHabits, habitOrder]);
+
+  const persistHabitOrder = async (order: string[]) => {
+    if (!user?.id) return;
+    const key = `habitOrder:${user.id}`;
+    setHabitOrder(order);
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(order));
+    } catch (e) {
+      console.warn('Failed to save habit order', e);
+    }
+  };
+
+  const moveHabit = (index: number, delta: number) => {
+    const list = orderedHabits.map(h => h.id);
+    const from = index;
+    const to = Math.max(0, Math.min(list.length - 1, index + delta));
+    if (from === to) return;
+    const next = [...list];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    persistHabitOrder(next);
   };
 
   const loadUserHabits = async (userId?: string) => {
@@ -986,13 +1046,11 @@ function AppInner() {
         <View style={[styles.dashboardHero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: 1 }] }>
           <View style={styles.heroTopRow}>
             <View style={styles.dashboardHeroLeft}>
-              <Text style={[styles.heroGreeting, { color: theme.colors.textMuted }]}>Hey {user?.user_metadata?.username || 'Hyfo human'} 👋</Text>
-              <Text style={[styles.heroHeadline, { color: theme.colors.text }]}>Stay hyperfocused today.</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity style={[styles.heroSignOut, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 }]} onPress={() => setThemesModalOpen(true)}>
                 <Text style={[styles.heroSignOutText, { color: theme.colors.text }]}>Themes</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>            
               <TouchableOpacity style={[styles.heroSignOut, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 }]} onPress={handleSignOut}>
                 <Text style={[styles.heroSignOutText, { color: theme.colors.text }]}>Sign out</Text>
               </TouchableOpacity>
@@ -1063,8 +1121,16 @@ function AppInner() {
           </View>
         ) : (
           <>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <TouchableOpacity
+              onPress={() => setIsReorderMode(v => !v)}
+              style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
+            >
+              <Text style={{ color: theme.colors.accent }}>{isReorderMode ? 'Done' : 'Reorder ↑↓'}</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.habitsList}>
-              {userHabits.map((habit) => {
+              {orderedHabits.map((habit, idx) => {
                 const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
                 const now = new Date();
                 // For checkin habits, check actual entries instead of lastLogged date
@@ -1109,17 +1175,34 @@ function AppInner() {
                   </View>
                 </View>
                 </View>
-                {alreadyComplete && isCheckinHabit(habit) ? (
+                {isReorderMode ? (
+                  <View style={styles.reorderButtons}>
+                    <TouchableOpacity
+                      onPress={() => moveHabit(idx, -1)}
+                      disabled={idx === 0}
+                      style={[styles.reorderBtn, idx === 0 && { opacity: 0.4 }]}
+                    >
+                      <Text style={[styles.reorderBtnText, { color: theme.colors.accent }]}>↑</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => moveHabit(idx, 1)}
+                      disabled={idx === orderedHabits.length - 1}
+                      style={[styles.reorderBtn, idx === orderedHabits.length - 1 && { opacity: 0.4 }]}
+                    >
+                      <Text style={[styles.reorderBtnText, { color: theme.colors.accent }]}>↓</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : alreadyComplete && isCheckinHabit(habit) ? (
                   <View style={[styles.habitLogPillDisabled, { backgroundColor: theme.colors.overlay, borderColor: theme.colors.border }]}>
                     <Text style={[styles.habitLogPillTextDisabled, { color: theme.colors.success }]}>✓ Done</Text>
                   </View>
                 ) : (
-                <TouchableOpacity
+                  <TouchableOpacity
                     style={[styles.habitLogPill, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
                     onPress={() => setActiveLogHabit(habit)}
-                >
+                  >
                     <Text style={[styles.habitLogPillText, { color: theme.colors.text }]}>Log</Text>
-                </TouchableOpacity>
+                  </TouchableOpacity>
                 )}
               </View>
 
@@ -1200,7 +1283,7 @@ function AppInner() {
         </View>
         
         <View style={styles.quickTapGrid}>
-          {userHabits.map((habit) => {
+          {orderedHabits.map((habit) => {
             const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
             const now = new Date();
             const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
@@ -1454,7 +1537,7 @@ function AppInner() {
 
 const renderRecentActivityModal = () => {
   const filteredEntries = modalEntries;
-    const habitFilters = userHabits.map(habit => ({ id: habit.id, name: habit.name, emoji: habit.emoji }));
+    const habitFilters = orderedHabits.map(habit => ({ id: habit.id, name: habit.name, emoji: habit.emoji }));
 
     return (
       <Modal visible={isRecentActivityModalVisible} animationType="slide" onRequestClose={() => setIsRecentActivityModalVisible(false)}>
@@ -1587,8 +1670,8 @@ const renderRecentActivityModal = () => {
           <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>Quick log</Text>
           <Text style={[styles.pickerSubtitle, { color: theme.colors.textMuted }]}>Choose a habit to log right away</Text>
 
-          <ScrollView style={{ maxHeight: 320 }}>
-            {userHabits.map(habit => {
+            <ScrollView style={{ maxHeight: 320 }}>
+            {orderedHabits.map(habit => {
               const lastLogged = habit.lastLogged ? new Date(habit.lastLogged) : null;
               const now = new Date();
               const alreadyLoggedToday = Boolean(lastLogged && isSameDay(lastLogged, now));
@@ -1906,6 +1989,39 @@ const renderRecentActivityModal = () => {
     <>
       <StatusBar style="light" />
       {content}
+      {/* Global menu modal */}
+      <Modal visible={isMenuOpen} animationType="fade" transparent onRequestClose={() => setIsMenuOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setIsMenuOpen(false)}>
+          <View style={[styles.pickerBackdrop]}> 
+            <TouchableWithoutFeedback>
+              <View style={[styles.menuCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }] }>
+                <Text style={[styles.menuTitle, { color: theme.colors.text }]}>Menu</Text>
+                <TouchableOpacity style={[styles.menuItem, { borderColor: theme.colors.border }]} onPress={() => { setIsMenuOpen(false); setIsProfileOpen(true); }}>
+                  <Text style={[styles.menuItemText, { color: theme.colors.text }]}>View profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuItem, { borderColor: theme.colors.border }]} onPress={() => setIsMenuOpen(false)}>
+                  <Text style={[styles.menuItemText, { color: theme.colors.text }]}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Profile placeholder modal */}
+      <Modal visible={isProfileOpen} animationType="slide" onRequestClose={() => setIsProfileOpen(false)}>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.colors.bg }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Profile</Text>
+            <TouchableOpacity onPress={() => setIsProfileOpen(false)}>
+              <Text style={[styles.modalClose, { color: theme.colors.warn }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={{ color: theme.colors.text }}>Coming soon…</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
       <QuickLogModal
         visible={!!activeLogHabit}
         habit={activeLogHabit}
@@ -3178,6 +3294,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#3182ce',
     fontWeight: '600',
+  },
+  menuCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    marginHorizontal: 20,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  reorderButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  reorderBtn: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  reorderBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  habitReorderToggle: {
+    alignSelf: 'flex-end',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
   },
   heatmapWrap: {
     flexDirection: 'row',
