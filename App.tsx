@@ -1825,7 +1825,7 @@ const renderRecentActivityModal = () => {
     ));
   };
 
-  let content: JSX.Element;
+  let content: React.ReactElement;
   switch (appState) {
     case 'onboarding':
       content = renderOnboarding();
@@ -1953,16 +1953,17 @@ const BottomActionBar = ({
   onNavigateDashboard: () => void;
   onOpenQuickLog: () => void;
 }) => {
+  const { theme } = useTheme();
   if (appState === 'dashboard') {
     const quickLogLabel = habits.length === 1 ? `Quick log ${habits[0].emoji}` : 'Quick log';
     return (
-      <SafeAreaView style={styles.bottomBarSafeArea}>
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.bottomBarSecondary} onPress={onOpenQuickLog}>
-            <Text style={styles.bottomBarSecondaryText}>{quickLogLabel}</Text>
+      <SafeAreaView style={[styles.bottomBarSafeArea, { backgroundColor: theme.colors.surface }] }>
+        <View style={[styles.bottomBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }] }>
+          <TouchableOpacity style={[styles.bottomBarSecondary, { borderColor: theme.colors.border }]} onPress={onOpenQuickLog}>
+            <Text style={[styles.bottomBarSecondaryText, { color: theme.colors.text }]}>{quickLogLabel}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.bottomBarPrimary} onPress={onNavigateLogging}>
-            <Text style={styles.bottomBarPrimaryText}>Open logging hub</Text>
+          <TouchableOpacity style={[styles.bottomBarPrimary, { backgroundColor: theme.colors.accent }]} onPress={onNavigateLogging}>
+            <Text style={[styles.bottomBarPrimaryText]}>Open logging hub</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -1971,10 +1972,10 @@ const BottomActionBar = ({
 
   if (appState === 'logging') {
     return (
-      <SafeAreaView style={styles.bottomBarSafeArea}>
-        <View style={styles.bottomBar}>
-          <TouchableOpacity style={styles.bottomBarPrimary} onPress={onNavigateDashboard}>
-            <Text style={styles.bottomBarPrimaryText}>Back to dashboard</Text>
+      <SafeAreaView style={[styles.bottomBarSafeArea]}>
+        <View style={[styles.bottomBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+          <TouchableOpacity style={[styles.bottomBarPrimary, { backgroundColor: theme.colors.accent }]} onPress={onNavigateDashboard}>
+            <Text style={[styles.bottomBarPrimaryText]}>Back to dashboard</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -2347,7 +2348,7 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
     alignSelf: 'center',
   },
-  toastText: {
+  toastTextLegacy: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',

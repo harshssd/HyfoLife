@@ -49,6 +49,7 @@ export const darkGlass = {
     heat3: "#32559C",
     heat4: "#3D67BF",
     overlay: "rgba(255,255,255,0.08)",
+    glow: "rgba(154,180,255,0.35)",
   }
 };
 
@@ -71,6 +72,7 @@ export const neoBrutal = {
     heat3: "#4A4A4A",
     heat4: "#5A5A5A",
     overlay: "rgba(255,255,255,0.04)",
+    glow: "rgba(180,255,57,0.25)",
   }
 };
 

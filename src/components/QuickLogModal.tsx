@@ -32,9 +32,9 @@ const QuickLogModal: React.FC<QuickLogModalProps> = ({
   const increment = starterMeta?.quickIncrement || habit?.quickIncrement || 1;
   const unitLabel = habit?.unitLabel || starterMeta?.displayUnit || 'unit';
   const timerPresets = [15, 30, 45, 60];
-  const displayUnit = quantity === 1 ? (habit?.unitLabel || unitLabel) : (habit?.unitPlural || starterMeta?.displayUnitPlural || `${unitLabel}s`);
 
   const [quantity, setQuantity] = useState(defaultQuantity);
+  const displayUnit = quantity === 1 ? (habit?.unitLabel || unitLabel) : (habit?.unitPlural || starterMeta?.displayUnitPlural || `${unitLabel}s`);
   const [timerRunning, setTimerRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
