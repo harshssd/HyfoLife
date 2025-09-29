@@ -63,6 +63,7 @@ function AppInner() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [hiddenHabitIds, setHiddenHabitIds] = useState<string[]>([]);
   const [isHiddenModalOpen, setIsHiddenModalOpen] = useState(false);
+  const [isCollapsedView, setIsCollapsedView] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userHabits, setUserHabits] = useState<UserHabit[]>([]);
   const [selectedHabits, setSelectedHabits] = useState<string[]>([]);
@@ -177,6 +178,32 @@ function AppInner() {
     };
     loadOrder();
   }, [user?.id, userHabits]);
+
+  // Load collapsed view preference
+  useEffect(() => {
+    const loadCollapsed = async () => {
+      if (!user?.id) return;
+      try {
+        const key = `habitCollapsedView:${user.id}`;
+        const stored = await AsyncStorage.getItem(key);
+        setIsCollapsedView(stored ? JSON.parse(stored) : false);
+      } catch (e) {
+        console.warn('Failed to load collapsed preference', e);
+      }
+    };
+    loadCollapsed();
+  }, [user?.id]);
+
+  const persistCollapsed = async (value: boolean) => {
+    if (!user?.id) return setIsCollapsedView(value);
+    const key = `habitCollapsedView:${user.id}`;
+    setIsCollapsedView(value);
+    try {
+      await AsyncStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.warn('Failed to save collapsed preference', e);
+    }
+  };
 
   // Load hidden habits per-user and reconcile with current list
   useEffect(() => {
@@ -1178,12 +1205,20 @@ function AppInner() {
               >
                 <Text style={{ color: theme.colors.text }}>Hidden ({hiddenHabitIds.length})</Text>
               </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setIsReorderMode(v => !v)}
-              style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
-            >
-              <Text style={{ color: theme.colors.accent }}>{isReorderMode ? 'Done' : 'Reorder ↑↓'}</Text>
-            </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => persistCollapsed(!isCollapsedView)}
+                  style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
+                >
+                  <Text style={{ color: theme.colors.text }}>{isCollapsedView ? 'Expand' : 'Collapse'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setIsReorderMode(v => !v)}
+                  style={[styles.habitReorderToggle, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}
+                >
+                  <Text style={{ color: theme.colors.accent }}>{isReorderMode ? 'Done' : 'Reorder ↑↓'}</Text>
+                </TouchableOpacity>
+              </View>
           </View>
           <View style={styles.habitsList}>
               {visibleHabits.map((habit, idx) => {
@@ -1268,10 +1303,16 @@ function AppInner() {
                 )}
               </View>
 
-                    {renderGoalModule(habit)}
-                    <View style={styles.heatmapWrap}>
-                      {renderHeatmapTiles(habit.id)}
-          </View>
+                    {isCollapsedView ? (
+                      renderGoalModule(habit, 'compact')
+                    ) : (
+                      <>
+                        {renderGoalModule(habit)}
+                        <View style={styles.heatmapWrap}>
+                          {renderHeatmapTiles(habit.id)}
+                        </View>
+                      </>
+                    )}
                   </View>
                 );
               })}
